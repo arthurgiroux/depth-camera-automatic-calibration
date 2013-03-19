@@ -38,7 +38,6 @@ Vec3f* findClosestPoint(vector<Vec3f> firstVector, vector<Vec3f> secondVector) {
 	return closest;
 }
 
-
 void drawCircleFromPoint(Vec3f p, Mat frame) {
 	Point center(cvRound(p[0]), cvRound(p[1]));
 	int radius = cvRound(p[2]);
@@ -47,6 +46,15 @@ void drawCircleFromPoint(Vec3f p, Mat frame) {
 	// draw the circle outline
 	circle(frame, center, radius, Scalar(0,0,255), 3, 8, 0);
 }
+
+void drawCirclesAndLineBetween(Vec3f p1, Vec3f p2, Mat frame) {
+	drawCircleFromPoint(p1, frame);
+	drawCircleFromPoint(p2, frame);
+	Point center1(cvRound(p1[0]), cvRound(p1[1]));
+	Point center2(cvRound(p2[0]), cvRound(p2[1]));
+	line(frame, center1, center2, Scalar(255, 0, 0), 3);
+}
+
 
 int main(int argc, char** argv) {
 	if (argc < 2) {
@@ -131,9 +139,7 @@ int main(int argc, char** argv) {
 		}*/
 
 		Vec3f* closest = findClosestPoint(redcircles, greencircles);
-		cout << closest[0][0] << " " << closest[0][1] << endl;
-		drawCircleFromPoint(closest[0], frame);
-		drawCircleFromPoint(closest[1], frame);
+		drawCirclesAndLineBetween(closest[0], closest[1], frame);
 
 		imshow("automatic calibration", *toshow);
 		
