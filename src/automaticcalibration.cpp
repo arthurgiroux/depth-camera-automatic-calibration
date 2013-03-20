@@ -1,5 +1,19 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <stdio.h>
+
+#define EPSILON 1
+#define MAX_STICK_LENGTH 200
+
+#define KEY_ONE 49
+#define KEY_TWO 50
+#define KEY_THREE 51
+#define KEY_FOUR 52
+#define KEY_FIVE 53
+#define KEY_SIX 54
+
+#define KEY_ESC 27
+#define KEY_SPACE 32
 
 using namespace cv;
 using namespace std;
@@ -22,13 +36,17 @@ double distanceBetweenPoints(Vec3f p1, Vec3f p2) {
 	return sqrt(pow((double) (p1[0]-p2[0]), 2.0) + pow((double) (p1[1] - p2[1]), 2.0));
 }
 
+bool radiusAreClose(float r1, float r2) {
+	return (r1 >= r2-EPSILON && r1 <= r2+EPSILON);
+}
+
 Vec3f* findClosestPoint(vector<Vec3f> firstVector, vector<Vec3f> secondVector) {
 	double mindistance = INFINITY;
 	Vec3f* closest = new Vec3f[2];
 	for (size_t i = 0; i < firstVector.size(); i++) {
 		for (size_t j = 0; j < secondVector.size(); j++) {
 			double curDist = distanceBetweenPoints(firstVector[i], secondVector[j]);
-			if (curDist < mindistance) {
+			if (curDist < mindistance && radiusAreClose(firstVector[i][2], secondVector[j][2])) {
 				mindistance = curDist;
 				closest[0] = firstVector[i];
 				closest[1] = secondVector[j];
@@ -55,6 +73,12 @@ void drawCirclesAndLineBetween(Vec3f p1, Vec3f p2, Mat frame) {
 	line(frame, center1, center2, Scalar(255, 0, 0), 3);
 }
 
+void OnChangePosition(int value, void* data) {
+	if (value >= 0) {
+		(*(VideoCapture*) data).set(CV_CAP_PROP_POS_MSEC, 1000 * value);
+	}
+}
+
 
 int main(int argc, char** argv) {
 	if (argc < 2) {
@@ -66,19 +90,28 @@ int main(int argc, char** argv) {
 	if(!cap.isOpened())
 		return -1;
 
+
+	bool paused = false;
+	bool somethingToRead = true;
+
 	namedWindow("automatic calibration", 0);
 	setMouseCallback( "automatic calibration", onMouse, 0 );
 	bool init = false;
 	
 	int param1 = 20;
 	int param2 = 20;
-	int minradius = 5;
-	int maxradius = 25;
+	int minradius = 2;
+	int maxradius = 20;
 	createTrackbar("canny threshold", "automatic calibration", &param1, 400);
 	createTrackbar("center threshold", "automatic calibration", &param2, 400);
 	createTrackbar("min radius", "automatic calibration", &minradius, 100);
 	createTrackbar("max radius", "automatic calibration", &maxradius, 200);
 	
+
+	// PLAYBACK CONTROLS
+	namedWindow("playback controls", 0);
+	createTrackbar("position", "playback controls", 0, floor(cap.get(CV_CAP_PROP_FRAME_COUNT) / cap.get(CV_CAP_PROP_FPS)), OnChangePosition, (void*) &cap);
+
 	while (1)
 	{
 		Mat* toshow;
@@ -87,8 +120,15 @@ int main(int argc, char** argv) {
 			toshow = &frame;
 			init = true;
 		}
-		
-		cap >> frame;
+
+		if (!paused) {
+			somethingToRead = cap.grab();
+		}
+		if (somethingToRead) {
+			cap.retrieve(frame, 0);
+		}
+
+		setTrackbarPos("position", "playback controls", floor(cap.get(CV_CAP_PROP_POS_FRAMES) / cap.get(CV_CAP_PROP_FPS)));
 		cvtColor(frame, hsv, CV_BGR2HSV);
 		// RED
 		inRange(hsv, Scalar(165, 50, 50), Scalar(180, 255, 255), maskredballup);
@@ -139,35 +179,43 @@ int main(int argc, char** argv) {
 		}*/
 
 		Vec3f* closest = findClosestPoint(redcircles, greencircles);
-		drawCirclesAndLineBetween(closest[0], closest[1], frame);
+		if (closest != NULL) {
+			if (distanceBetweenPoints(closest[0], closest[1]) <= MAX_STICK_LENGTH) {
+				drawCirclesAndLineBetween(closest[0], closest[1], frame);
+			}
+		}
 
 		imshow("automatic calibration", *toshow);
 		
 		int key = waitKey(30);
 		switch (key) {
 
-			case 49:
+			case KEY_ONE:
 				toshow = &frame;
 				break;
 				
-			case 50:
+			case KEY_TWO:
 				toshow = &hsv;
 				break;
 				
-			case 51:
+			case KEY_FOUR:
 				toshow = &mask;
 				break;
 
-			case 52:
+			case KEY_FIVE:
 				toshow = &maskredballup;
 				break;
 
-			case 53:
+			case KEY_SIX:
 				toshow = &maskgreenballup;
 				break;
+
+			case KEY_ESC: return 0;
 				
-			case 27: return 0;
-				
+			case KEY_SPACE:
+				paused = !paused;
+				break;
+
 			default:
 				break;
 		}
