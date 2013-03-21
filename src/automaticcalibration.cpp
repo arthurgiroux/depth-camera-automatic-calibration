@@ -5,15 +5,7 @@
 #define EPSILON 1
 #define MAX_STICK_LENGTH 200
 
-#define KEY_ONE 49
-#define KEY_TWO 50
-#define KEY_THREE 51
-#define KEY_FOUR 52
-#define KEY_FIVE 53
-#define KEY_SIX 54
-
 #define KEY_ESC 27
-#define KEY_SPACE 32
 
 using namespace cv;
 using namespace std;
@@ -190,29 +182,29 @@ int main(int argc, char** argv) {
 		int key = waitKey(30);
 		switch (key) {
 
-			case KEY_ONE:
+			case '1':
 				toshow = &frame;
 				break;
 				
-			case KEY_TWO:
+			case '2':
 				toshow = &hsv;
 				break;
 				
-			case KEY_FOUR:
+			case '3':
 				toshow = &mask;
 				break;
 
-			case KEY_FIVE:
+			case '4':
 				toshow = &maskredballup;
 				break;
 
-			case KEY_SIX:
+			case '5':
 				toshow = &maskgreenballup;
 				break;
 
 			case KEY_ESC: return 0;
 				
-			case KEY_SPACE:
+			case ' ':
 				paused = !paused;
 				break;
 
