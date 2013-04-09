@@ -1,8 +1,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <stdio>
 #include <string>
 #include <iostream>
+#include <fstream>
 
 #define MAX_STICK_LENGTH 100
 #define ITERATION_PER_FRAME 3
@@ -19,6 +19,14 @@
 using namespace cv;
 using namespace std;
 
+
+// We use this struct to pass the data to onMouse callback
+struct pairVec3f {
+  Vec3f* first;
+  Vec3f* second;
+};
+
+
 static void onMouse( int event, int x, int y, int, void* data )
 {
 	if (event == CV_EVENT_LBUTTONDOWN) {
@@ -29,9 +37,9 @@ static void onMouse( int event, int x, int y, int, void* data )
 		cout <<  (int) color[2] << endl << endl;*/
 		//cout << "(" << x << ", " << y << ")" << endl;
 		
-		*(((Vec3f[]) data)[0]) = Vec3f(x, y, 0);
+		*(((pairVec3f*) data)->first) = Vec3f(x, y, 0);
 	} else if (event == CV_EVENT_RBUTTONDOWN) {
-		*(((Vec3f[]) data)[1]) = Vec3f(x, y, 0);
+		*(((pairVec3f*) data)->second) = Vec3f(x, y, 0);
 	}
 }
 
@@ -85,8 +93,21 @@ bool recordPositionOfBall(vector<pair<int, Vec3f> >* records, Vec3f bestCandidat
 }
 
 
-void writeVectorsToFile(const string filename,  const vector<pair<int, Vec3f> >* records) {
-	ofstream file(filename);
+void writeVectorsToFile(const string filename, const string suffix, const string path, const vector<pair<int, Vec3f> >* records) {
+
+	string finalname;
+
+	// Get the filename
+	size_t posName = filename.find_last_of("/");
+	size_t posExt = filename.find_last_of(".");
+	if (posName == std::string::npos) {
+		posName = 0;
+	}
+	finalname = filename.substr(posName, posExt - posName);
+
+	finalname = path + "/" + finalname + "_" + suffix + ".txt";
+
+	ofstream file(finalname.c_str());
 	if (file.is_open()) {
 		for(size_t i = 0; i < records->size(); i++) {
 			pair<int, Vec3f> point = (*records)[i];
@@ -112,7 +133,7 @@ void OnChangePosition(int value, void* data) {
 
 int main(int argc, char** argv) {
 	if (argc < 3) {
-		printf("usage: ./" + argv[0] + " path-to-video output-directory");
+		cout << "usage: " << argv[0] << " <path-to-video-file> <output-directory>" << endl;
 		return -1;
 	}
 	
@@ -125,7 +146,7 @@ int main(int argc, char** argv) {
 	vector<pair<int, Vec3f> > pointsRed;
 	vector<pair<int, Vec3f> > pointsGreen;
 	Vec3f lastRed, lastGreen;
-	Vec3f[] lastPair = { &lastRed, &lastGreen };
+	struct pairVec3f lastPair = { &lastRed, &lastGreen };
 
 	int currentFrameNumber = 0;
 
@@ -136,7 +157,7 @@ int main(int argc, char** argv) {
 	bool somethingToRead = true;
 
 	namedWindow("automatic calibration", 0);
-	setMouseCallback("automatic calibration", onMouse, lastPair);
+	setMouseCallback("automatic calibration", onMouse, &lastPair);
 	bool init = false;
 	
 	namedWindow("parameters", 0);
@@ -267,7 +288,7 @@ int main(int argc, char** argv) {
 				break;
 
 			case 'w':
-				//cout << substr()
+				writeVectorsToFile(string(argv[1]), "red", string(argv[2]), &pointsRed);
 				//writeVectorsToFile(argv[2] + "/outpu.txt");
 				break;
 
