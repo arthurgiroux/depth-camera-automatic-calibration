@@ -5,6 +5,13 @@
 #define MAX_STICK_LENGTH 100
 #define ITERATION_PER_FRAME 3
 
+#define COLOR_RED Scalar(0, 0, 255)
+#define COLOR_GREEN Scalar(0, 255, 0)
+#define COLOR_BLUE Scalar(255, 0, 0)
+#define COLOR_YELLOW Scalar(0, 255, 255)
+#define COLOR_TEAL Scalar(255, 255, 0)
+#define COLOR_PURPLE Scalar(255, 0, 255)
+
 #define KEY_ESC 27
 
 using namespace cv;
@@ -48,37 +55,42 @@ Vec3f findClosestPoint(const vector<Vec3f>* points, Vec3f lastKnownPoint) {
 	return (*points)[index];
 }
 
-
-void drawCircleFromPoint(Vec3f p, Mat* frame) {
-	Point center(cvRound(p[0]), cvRound(p[1]));
-	int radius = cvRound(p[2]);
+void drawCircleFromPoint(Vec3f p, Mat* frame, Scalar color = COLOR_RED) {
+	Point center(p[0], p[1]);
 	// draw the circle center
-	circle(*frame, center, 3, Scalar(0,255,0), -1, 8, 0);
+	circle(*frame, center, 3, COLOR_GREEN, -1);
 	// draw the circle outline
-	circle(*frame, center, radius, Scalar(0,0,255), 3, 8, 0);
+	circle(*frame, center, p[2], color, 3);
 }
 
 
-void recordPositionOfBall(vector<pair<int, Vec3f> >* records, const vector<Vec3f>* circlesFound,
-                          Vec3f* lastKnownPoint, int currentFrameNumber, Mat* frame) {
-	circle(*frame, Point((*lastKnownPoint)[0], (*lastKnownPoint)[1]), 3, Scalar(255,255,0), -1, 8, 0);
-	if (circlesFound->size() > 0) {
-		Vec3f bestCandidate = findClosestPoint(circlesFound, *lastKnownPoint);
-		if (records->size() > 0) {
-			pair<int, Vec3f> lastRegistered = records->back();
+bool recordPositionOfBall(vector<pair<int, Vec3f> >* records, Vec3f bestCandidate,
+                          Vec3f* lastKnownPoint, int currentFrameNumber) {
+	if (records->size() > 0) {
+		pair<int, Vec3f> lastRegistered = records->back();
 			//cout << distanceBetweenPoints(lastRegistered.second, currentRed) << " --- " << (curFrame - lastRegistered.first)  << endl;
-			if (*lastKnownPoint != lastRegistered.second ||
-			    distanceBetweenPoints(lastRegistered.second, bestCandidate) <= (ITERATION_PER_FRAME * (currentFrameNumber - lastRegistered.first))) {
-				*lastKnownPoint = bestCandidate;
-				records->push_back(make_pair(currentFrameNumber, bestCandidate));
-				drawCircleFromPoint(bestCandidate, frame);
-			}
-		}
-		else {
+		if (*lastKnownPoint != lastRegistered.second ||
+		    distanceBetweenPoints(lastRegistered.second, bestCandidate) <= (ITERATION_PER_FRAME * (currentFrameNumber - lastRegistered.first))) {
 			*lastKnownPoint = bestCandidate;
 			records->push_back(make_pair(currentFrameNumber, bestCandidate));
-			drawCircleFromPoint(bestCandidate, frame);
+			return true;
 		}
+	}
+	else {
+		*lastKnownPoint = bestCandidate;
+		records->push_back(make_pair(currentFrameNumber, bestCandidate));
+		return true;
+	}
+
+	return false;
+}
+
+
+void showPath(Mat* frame, const vector<pair<int, Vec3f> >* records, Scalar color) {
+	for(size_t i = 0; i < records->size(); i++) {
+		pair<int, Vec3f> point = (*records)[i];
+		Point center(point.second[0], point.second[1]);
+		circle(*frame, center, 1, color, -1);
 	}
 }
 
@@ -102,6 +114,8 @@ int main(int argc, char** argv) {
 	Mat frame, hsv, maskredballup, maskredballdown, maskgreenballup, maskgreenballdown, mask;
 	vector<pair<int, Vec3f> > pointsRed;
 	vector<pair<int, Vec3f> > pointsGreen;
+
+	int currentFrameNumber = 0;
 
 
 	bool paused = false;
@@ -145,7 +159,9 @@ int main(int argc, char** argv) {
 			cap.retrieve(frame, 0);
 		}
 
-		setTrackbarPos("position", "playback controls", floor(cap.get(CV_CAP_PROP_POS_FRAMES) / cap.get(CV_CAP_PROP_FPS)));
+		currentFrameNumber = cap.get(CV_CAP_PROP_POS_FRAMES);
+
+		setTrackbarPos("position", "playback controls", floor(currentFrameNumber / cap.get(CV_CAP_PROP_FPS)));
 		cvtColor(frame, hsv, CV_BGR2HSV);
 
 		// RED
@@ -158,7 +174,8 @@ int main(int argc, char** argv) {
 		vector<Vec3f> redcircles;
 
 		// void HoughCircles(Mat& image, vector<Vec3f>& circles, int method, double dp, double minDist, double param1=100, double param2=100, int minRadius=0, int maxRadius=0)
-		HoughCircles(maskredballup, redcircles, CV_HOUGH_GRADIENT, 2, 20, (param1 > 0) ? param1 : 1, (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
+		HoughCircles(maskredballup, redcircles, CV_HOUGH_GRADIENT, 2, 20, (param1 > 0) ? param1 : 1,
+		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 		// GREEN
 		inRange(hsv, Scalar(140, 50, 50), Scalar(160, 255, 255), maskgreenballup);
@@ -173,99 +190,89 @@ int main(int argc, char** argv) {
 		mask = maskgreenballup | maskredballup;
 
 		// void HoughCircles(Mat& image, vector<Vec3f>& circles, int method, double dp, double minDist, double param1=100, double param2=100, int minRadius=0, int maxRadius=0)
-		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, 2, 20, (param1 > 0) ? param1 : 1, (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
+		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, 2, 20, (param1 > 0) ? param1 : 1,
+		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 
-		if (recording && !paused) {
-			if (redcircles.size() > 0) {
-				recordPositionOfBall(&pointsRed, &redcircles, &lastRed, cap.get(CV_CAP_PROP_POS_FRAMES), &frame);
+		if (redcircles.size() > 0) {
+			circle(frame, Point(lastRed[0], lastRed[1]), 3, COLOR_TEAL, -1);
+			Vec3f bestCandidate = findClosestPoint(&redcircles, lastRed);
+			Scalar color = COLOR_RED;
+
+			if (recording && !paused) {
+				if (recordPositionOfBall(&pointsRed, bestCandidate, &lastRed, currentFrameNumber)) {
+					color = COLOR_BLUE;
+				}
 			}
-			if (greencircles.size() > 0) {
-				recordPositionOfBall(&pointsGreen, &greencircles, &lastGreen, cap.get(CV_CAP_PROP_POS_FRAMES), &frame);
+			drawCircleFromPoint(bestCandidate, &frame, color);
+		}
+
+		if (greencircles.size() > 0) {
+			circle(frame, Point(lastGreen[0], lastGreen[1]), 3, COLOR_PURPLE, -1);
+			Vec3f bestCandidate = findClosestPoint(&greencircles, lastGreen);
+			Scalar color = COLOR_RED;
+
+			if (recording && !paused) {
+				if (recordPositionOfBall(&pointsGreen, bestCandidate, &lastGreen, currentFrameNumber)) {
+					color = COLOR_BLUE;
+				}
 			}
+			drawCircleFromPoint(bestCandidate, &frame, color);
 		}
 
 		if (showpath) {
-			pair<int, Vec3f> *lastPoint = NULL;
-			cout << "SIZE : " << pointsRed.size() << "   --   " << pointsGreen.size() << endl;
-			for(size_t i = 0; i < pointsRed.size(); i++) {
-				pair<int, Vec3f> point = pointsRed[i];
-				Point center(point.second[0], point.second[1]);
-				circle(frame, center, 3, Scalar(0, 255, 255), 1, 8, 0);
-				if (lastPoint != NULL) {
-					Point center2(lastPoint->second[0], lastPoint->second[1]);
-					//line(frame, center, center2, Scalar(255, 255, 0), 3);
-				}
-				lastPoint = &point;
-			}
-			for(size_t i = 0; i < pointsGreen.size(); i++) {
-				pair<int, Vec3f> point = pointsGreen[i];
-				Point center(point.second[0], point.second[1]);
-				circle(frame, center, 3, Scalar(255, 0, 255), 1, 8, 0);
-				if (lastPoint != NULL) {
-					Point center2(lastPoint->second[0], lastPoint->second[1]);
-					//line(frame, center, center2, Scalar(255, 255, 0), 3);
-				}
-				lastPoint = &point;
-			}
+			showPath(&frame, &pointsRed, COLOR_TEAL);
+			showPath(&frame, &pointsGreen, COLOR_PURPLE);
 		}
 
-		/*circle(frame, Point(lastGreen[0], lastGreen[1]), 3, Scalar(0,255,255), -1, 8, 0);
-		if (greencircles.size() > 0) {
-			 Vec3f currentGreen = findClosestPoint(greencircles, lastGreen);
-			 lastGreen = currentGreen;
-			 pointsGreen.push_back(make_pair(cap.get(CV_CAP_PROP_POS_FRAMES), currentGreen));
-			 drawCircleFromPoint(currentGreen, frame);
-		}*/
+		imshow("automatic calibration", *toshow);
 
+		int key = waitKey(30);
+		switch (key) {
 
-			imshow("automatic calibration", *toshow);
+			case '1':
+				toshow = &frame;
+				break;
 
-			int key = waitKey(30);
-			switch (key) {
+			case '2':
+				toshow = &hsv;
+				break;
 
-				case '1':
-					toshow = &frame;
-					break;
+			case '3':
+				toshow = &mask;
+				break;
 
-				case '2':
-					toshow = &hsv;
-					break;
+			case '4':
+				toshow = &maskredballup;
+				break;
 
-				case '3':
-					toshow = &mask;
-					break;
-
-				case '4':
-					toshow = &maskredballup;
-					break;
-
-				case '5':
+			case '5':
 				toshow = &maskgreenballup;
-					break;
+				break;
 
-				case 'r':
-					recording = !recording;
-					break;
+			case 'r':
+				recording = !recording;
+				break;
 
-				case 'w':
-					//writeVectorsToFile();
-					break;
+			case 'w':
+				//writeVectorsToFile();
+				break;
 
-				case 's':
-					showpath = !showpath;
-					break;
+			case 's':
+				showpath = !showpath;
+				break;
 
-				case KEY_ESC:
-					return 0;
+			case KEY_ESC:
+				return 0;
 
-				case ' ':
-					paused = !paused;
-					break;
+			case ' ':
+				paused = !paused;
+				break;
 
-				default:
-					break;
-			}
+			default:
+				break;
+
 		}
-		return 0;
 	}
+	return 0;
+}
