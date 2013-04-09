@@ -194,6 +194,9 @@ int main(int argc, char** argv) {
 
 		currentFrameNumber = cap.get(CV_CAP_PROP_POS_FRAMES);
 
+		std::stringstream ss;
+		ss << "frame : " << currentFrameNumber << " captured : " << pointsRed.size() << " red, " << pointsGreen.size() << " green"; 
+		putText(frame, ss.str(), Point(10, 50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255, 255, 255));
 		setTrackbarPos("position", "playback controls", floor(currentFrameNumber / cap.get(CV_CAP_PROP_FPS)));
 		cvtColor(frame, hsv, CV_BGR2HSV);
 
