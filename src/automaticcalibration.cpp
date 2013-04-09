@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
 
 			case 'w':
 				writeVectorsToFile(string(argv[1]), "red", string(argv[2]), &pointsRed);
-				//writeVectorsToFile(argv[2] + "/outpu.txt");
+				writeVectorsToFile(string(argv[1]), "green", string(argv[2]), &pointsGreen);
 				break;
 
 			case 's':
