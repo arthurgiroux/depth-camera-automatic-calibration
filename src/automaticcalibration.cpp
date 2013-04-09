@@ -17,11 +17,14 @@
 using namespace cv;
 using namespace std;
 
+// We use this struct to pass the data to onMouse callback
+struct pairVec3f {
+	Vec3f* first;
+	Vec3f* second;
+};
 
-Vec3f lastRed, lastGreen;
 
-
-static void onMouse( int event, int x, int y, int, void* )
+static void onMouse( int event, int x, int y, int, void* data )
 {
 	if (event == CV_EVENT_LBUTTONDOWN) {
 
@@ -29,10 +32,11 @@ static void onMouse( int event, int x, int y, int, void* )
 		cout << (int) color[0] << endl;
 		cout <<  (int)  color[1] << endl;
 		cout <<  (int) color[2] << endl << endl;*/
-		cout << "(" << x << ", " << y << ")" << endl;
-		lastRed = Vec3f(x, y, 0);
+		//cout << "(" << x << ", " << y << ")" << endl;
+		
+		*(((pairVec3f*) data)->first) = Vec3f(x, y, 0);
 	} else if (event == CV_EVENT_RBUTTONDOWN) {
-		lastGreen = Vec3f(x, y, 0);
+		*(((pairVec3f*) data)->second) = Vec3f(x, y, 0);
 	}
 }
 
@@ -114,6 +118,8 @@ int main(int argc, char** argv) {
 	Mat frame, hsv, maskredballup, maskredballdown, maskgreenballup, maskgreenballdown, mask;
 	vector<pair<int, Vec3f> > pointsRed;
 	vector<pair<int, Vec3f> > pointsGreen;
+	Vec3f lastRed, lastGreen;
+	struct pairVec3f lastPair = { &lastRed, &lastGreen };
 
 	int currentFrameNumber = 0;
 
@@ -124,7 +130,7 @@ int main(int argc, char** argv) {
 	bool somethingToRead = true;
 
 	namedWindow("automatic calibration", 0);
-	setMouseCallback( "automatic calibration", onMouse, 0 );
+	setMouseCallback("automatic calibration", onMouse, &lastPair);
 	bool init = false;
 	
 	namedWindow("parameters", 0);
