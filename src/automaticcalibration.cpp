@@ -296,6 +296,11 @@ int main(int argc, char** argv) {
 				showpath = !showpath;
 				break;
 
+			case 'd':
+				pointsRed.clear();
+				pointsGreen.clear();
+				break;
+
 			case KEY_ESC:
 				return 0;
 
