@@ -1,6 +1,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <stdio.h>
+#include <stdio>
+#include <string>
+#include <iostream>
 
 #define MAX_STICK_LENGTH 100
 #define ITERATION_PER_FRAME 3
@@ -17,13 +19,6 @@
 using namespace cv;
 using namespace std;
 
-// We use this struct to pass the data to onMouse callback
-struct pairVec3f {
-	Vec3f* first;
-	Vec3f* second;
-};
-
-
 static void onMouse( int event, int x, int y, int, void* data )
 {
 	if (event == CV_EVENT_LBUTTONDOWN) {
@@ -34,9 +29,9 @@ static void onMouse( int event, int x, int y, int, void* data )
 		cout <<  (int) color[2] << endl << endl;*/
 		//cout << "(" << x << ", " << y << ")" << endl;
 		
-		*(((pairVec3f*) data)->first) = Vec3f(x, y, 0);
+		*(((Vec3f[]) data)[0]) = Vec3f(x, y, 0);
 	} else if (event == CV_EVENT_RBUTTONDOWN) {
-		*(((pairVec3f*) data)->second) = Vec3f(x, y, 0);
+		*(((Vec3f[]) data)[1]) = Vec3f(x, y, 0);
 	}
 }
 
@@ -90,6 +85,17 @@ bool recordPositionOfBall(vector<pair<int, Vec3f> >* records, Vec3f bestCandidat
 }
 
 
+void writeVectorsToFile(const string filename,  const vector<pair<int, Vec3f> >* records) {
+	ofstream file(filename);
+	if (file.is_open()) {
+		for(size_t i = 0; i < records->size(); i++) {
+			pair<int, Vec3f> point = (*records)[i];
+			file << point.first << " " << point.second[0] << " " << point.second[1] << " " << point.second[2] << endl;
+		}
+		file.close();
+	}
+}
+
 void showPath(Mat* frame, const vector<pair<int, Vec3f> >* records, Scalar color) {
 	for(size_t i = 0; i < records->size(); i++) {
 		pair<int, Vec3f> point = (*records)[i];
@@ -105,8 +111,8 @@ void OnChangePosition(int value, void* data) {
 }
 
 int main(int argc, char** argv) {
-	if (argc < 2) {
-		printf("you need to specify a file");
+	if (argc < 3) {
+		printf("usage: ./" + argv[0] + " path-to-video output-directory");
 		return -1;
 	}
 	
@@ -119,7 +125,7 @@ int main(int argc, char** argv) {
 	vector<pair<int, Vec3f> > pointsRed;
 	vector<pair<int, Vec3f> > pointsGreen;
 	Vec3f lastRed, lastGreen;
-	struct pairVec3f lastPair = { &lastRed, &lastGreen };
+	Vec3f[] lastPair = { &lastRed, &lastGreen };
 
 	int currentFrameNumber = 0;
 
@@ -130,7 +136,7 @@ int main(int argc, char** argv) {
 	bool somethingToRead = true;
 
 	namedWindow("automatic calibration", 0);
-	setMouseCallback("automatic calibration", onMouse, &lastPair);
+	setMouseCallback("automatic calibration", onMouse, lastPair);
 	bool init = false;
 	
 	namedWindow("parameters", 0);
@@ -261,7 +267,8 @@ int main(int argc, char** argv) {
 				break;
 
 			case 'w':
-				//writeVectorsToFile();
+				//cout << substr()
+				//writeVectorsToFile(argv[2] + "/outpu.txt");
 				break;
 
 			case 's':
