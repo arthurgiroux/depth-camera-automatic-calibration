@@ -2,6 +2,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <stdio.h>
 
+<<<<<<< HEAD
 #define MAX_STICK_LENGTH 100
 #define ITERATION_PER_FRAME 3
 
@@ -36,6 +37,7 @@ double distanceBetweenPoints(Vec3f p1, Vec3f p2) {
 	// sqrt((x1 - x2)^2 + (y1 - y2)^2)
 	return sqrt((p1[0]-p2[0])*(p1[0]-p2[0]) + (p1[1] - p2[1])*(p1[1] - p2[1]));
 }
+
 
 Vec3f findClosestPoint(const vector<Vec3f>* points, Vec3f lastKnownPoint) {
 	double mindistance = INFINITY;
@@ -82,16 +84,16 @@ void recordPositionOfBall(vector<pair<int, Vec3f> >* records, const vector<Vec3f
 			if (*lastKnownPoint != lastRegistered.second ||
 			    distanceBetweenPoints(lastRegistered.second, bestCandidate) <= (ITERATION_PER_FRAME * (currentFrameNumber - lastRegistered.first))) {
 				*lastKnownPoint = bestCandidate;
-				records->push_back(make_pair(currentFrameNumber, bestCandidate));
-				drawCircleFromPoint(bestCandidate, frame);
-			}
-		}
-		else {
-			*lastKnownPoint = bestCandidate;
 			records->push_back(make_pair(currentFrameNumber, bestCandidate));
 			drawCircleFromPoint(bestCandidate, frame);
 		}
 	}
+	else {
+		*lastKnownPoint = bestCandidate;
+		records->push_back(make_pair(currentFrameNumber, bestCandidate));
+		drawCircleFromPoint(bestCandidate, frame);
+	}
+}
 }
 
 void OnChangePosition(int value, void* data) {
@@ -101,6 +103,12 @@ void OnChangePosition(int value, void* data) {
 }
 
 
+
+void OnChangePosition(int value, void* data) {
+	if (value >= 0) {
+		(*(VideoCapture*) data).set(CV_CAP_PROP_POS_MSEC, 1000 * value);
+	}
+}
 
 
 int main(int argc, char** argv) {
@@ -128,6 +136,7 @@ int main(int argc, char** argv) {
 	int param2 = 20;
 	int minradius = 2;
 	int maxradius = 20;
+
 	createTrackbar("canny threshold", "parameters", &param1, 400);
 	createTrackbar("center threshold", "parameters", &param2, 400);
 	createTrackbar("min radius", "parameters", &minradius, 100);
@@ -153,9 +162,6 @@ int main(int argc, char** argv) {
 		if (somethingToRead) {
 			cap.retrieve(frame, 0);
 		}
-
-
-		circleFrame = Mat(frame);
 
 		setTrackbarPos("position", "playback controls", floor(cap.get(CV_CAP_PROP_POS_FRAMES) / cap.get(CV_CAP_PROP_FPS)));
 		cvtColor(frame, hsv, CV_BGR2HSV);
@@ -188,39 +194,39 @@ int main(int argc, char** argv) {
 		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, 2, 20, (param1 > 0) ? param1 : 1, (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 
-			if (recording && !paused) {
-				if (redcircles.size() > 0) {
-					recordPositionOfBall(&pointsRed, &redcircles, &lastRed, cap.get(CV_CAP_PROP_POS_FRAMES), &frame);
-				}
-				if (greencircles.size() > 0) {
-					recordPositionOfBall(&pointsGreen, &greencircles, &lastGreen, cap.get(CV_CAP_PROP_POS_FRAMES), &frame);
-				}
+		if (recording && !paused) {
+			if (redcircles.size() > 0) {
+				recordPositionOfBall(&pointsRed, &redcircles, &lastRed, cap.get(CV_CAP_PROP_POS_FRAMES), &frame);
 			}
+			if (greencircles.size() > 0) {
+				recordPositionOfBall(&pointsGreen, &greencircles, &lastGreen, cap.get(CV_CAP_PROP_POS_FRAMES), &frame);
+			}
+		}
 
-			if (showpath) {
-				pair<int, Vec3f> *lastPoint = NULL;
-				cout << "SIZE : " << pointsRed.size() << "   --   " << pointsGreen.size() << endl;
-				for(size_t i = 0; i < pointsRed.size(); i++) {
-					pair<int, Vec3f> point = pointsRed[i];
-					Point center(point.second[0], point.second[1]);
-					circle(frame, center, 3, Scalar(0, 255, 255), 1, 8, 0);
-					if (lastPoint != NULL) {
-						Point center2(lastPoint->second[0], lastPoint->second[1]);
+		if (showpath) {
+			pair<int, Vec3f> *lastPoint = NULL;
+			cout << "SIZE : " << pointsRed.size() << "   --   " << pointsGreen.size() << endl;
+			for(size_t i = 0; i < pointsRed.size(); i++) {
+				pair<int, Vec3f> point = pointsRed[i];
+				Point center(point.second[0], point.second[1]);
+				circle(frame, center, 3, Scalar(0, 255, 255), 1, 8, 0);
+				if (lastPoint != NULL) {
+					Point center2(lastPoint->second[0], lastPoint->second[1]);
 					//line(frame, center, center2, Scalar(255, 255, 0), 3);
-					}
-					lastPoint = &point;
 				}
-				for(size_t i = 0; i < pointsGreen.size(); i++) {
-					pair<int, Vec3f> point = pointsGreen[i];
-					Point center(point.second[0], point.second[1]);
-					circle(frame, center, 3, Scalar(255, 0, 255), 1, 8, 0);
-					if (lastPoint != NULL) {
-						Point center2(lastPoint->second[0], lastPoint->second[1]);
-					//line(frame, center, center2, Scalar(255, 255, 0), 3);
-					}
-					lastPoint = &point;
-				}
+				lastPoint = &point;
 			}
+			for(size_t i = 0; i < pointsGreen.size(); i++) {
+				pair<int, Vec3f> point = pointsGreen[i];
+				Point center(point.second[0], point.second[1]);
+				circle(frame, center, 3, Scalar(255, 0, 255), 1, 8, 0);
+				if (lastPoint != NULL) {
+					Point center2(lastPoint->second[0], lastPoint->second[1]);
+					//line(frame, center, center2, Scalar(255, 255, 0), 3);
+				}
+				lastPoint = &point;
+			}
+		}
 
 		/*circle(frame, Point(lastGreen[0], lastGreen[1]), 3, Scalar(0,255,255), -1, 8, 0);
 		if (greencircles.size() > 0) {
@@ -230,67 +236,59 @@ int main(int argc, char** argv) {
 			 drawCircleFromPoint(currentGreen, frame);
 		}*/
 
-		/*Vec3f* closest = findClosestPoint(redcircles, greencircles);
-		if (closest != NULL) {
-			if (distanceBetweenPoints(closest[0], closest[1]) <= MAX_STICK_LENGTH) {
-				drawCirclesAndLineBetween(closest[0], closest[1], frame);
-			}
-		}*/
+
+			 imshow("automatic calibration", *toshow);
+
+			 int key = waitKey(30);
+			 switch (key) {
+
+			 	case '1':
+			 	toshow = &frame;
+			 	break;
+			 	
+			 	case '2':
+			 	toshow = &hsv;
+			 	break;
+			 	
+			 	case '3':
+			 	toshow = &mask;
+			 	break;
+
+			 	case '4':
+			 	toshow = &maskredballup;
+			 	break;
+
+			 	case '5':
+			 	toshow = &maskgreenballup;
+			 	break;
 
 
+			 	case '6':
+			 	toshow = &circleFrame;
+			 	break;
 
-			imshow("automatic calibration", *toshow);
+			 	case 'r':
+			 	recording = !recording;
+			 	break;
 
-			int key = waitKey(30);
-			switch (key) {
-
-				case '1':
-				toshow = &frame;
-				break;
-				
-				case '2':
-				toshow = &hsv;
-				break;
-				
-				case '3':
-				toshow = &mask;
-				break;
-
-				case '4':
-				toshow = &maskredballup;
-				break;
-
-				case '5':
-				toshow = &maskgreenballup;
-				break;
-
-
-				case '6':
-				toshow = &circleFrame;
-				break;
-
-				case 'r':
-				recording = !recording;
-				break;
-
-				case 'w':
+			 	case 'w':
 				//writeVectorsToFile();
-				break;
+			 	break;
 
-				case 's':
-				showpath = !showpath;
-				break;
+			 	case 's':
+			 	showpath = !showpath;
+			 	break;
 
-				case KEY_ESC: return 0;
-				
-				case ' ':
-				paused = !paused;
-				break;
+			 	case KEY_ESC: return 0;
+			 	
+			 	case ' ':
+			 	paused = !paused;
+			 	break;
 
-				default:
-				break;
+			 	default:
+			 	break;
+			 }
 			}
-		}
 
-		return 0;
-	}
+			return 0;
+		}
