@@ -2,7 +2,6 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <stdio.h>
 
-<<<<<<< HEAD
 #define MAX_STICK_LENGTH 100
 #define ITERATION_PER_FRAME 3
 
@@ -12,10 +11,7 @@ using namespace cv;
 using namespace std;
 
 
-Mat frame, circleFrame, hsv, maskredballup, maskredballdown, maskgreenballup, maskgreenballdown, mask;
 Vec3f lastRed, lastGreen;
-vector<pair<int, Vec3f> > pointsRed;
-vector<pair<int, Vec3f> > pointsGreen;
 
 
 static void onMouse( int event, int x, int y, int, void* )
@@ -62,16 +58,6 @@ void drawCircleFromPoint(Vec3f p, Mat* frame) {
 	circle(*frame, center, radius, Scalar(0,0,255), 3, 8, 0);
 }
 
-/*
-void drawCirclesAndLineBetween(Vec3f p1, Vec3f p2, Mat frame) {
-	drawCircleFromPoint(p1, frame);
-	drawCircleFromPoint(p2, frame);
-	Point center1(cvRound(p1[0]), cvRound(p1[1]));
-	Point center2(cvRound(p2[0]), cvRound(p2[1]));
-	line(frame, center1, center2, Scalar(255, 0, 0), 3);
-}
-*/
-
 
 void recordPositionOfBall(vector<pair<int, Vec3f> >* records, const vector<Vec3f>* circlesFound,
                           Vec3f* lastKnownPoint, int currentFrameNumber, Mat* frame) {
@@ -84,16 +70,16 @@ void recordPositionOfBall(vector<pair<int, Vec3f> >* records, const vector<Vec3f
 			if (*lastKnownPoint != lastRegistered.second ||
 			    distanceBetweenPoints(lastRegistered.second, bestCandidate) <= (ITERATION_PER_FRAME * (currentFrameNumber - lastRegistered.first))) {
 				*lastKnownPoint = bestCandidate;
+				records->push_back(make_pair(currentFrameNumber, bestCandidate));
+				drawCircleFromPoint(bestCandidate, frame);
+			}
+		}
+		else {
+			*lastKnownPoint = bestCandidate;
 			records->push_back(make_pair(currentFrameNumber, bestCandidate));
 			drawCircleFromPoint(bestCandidate, frame);
 		}
 	}
-	else {
-		*lastKnownPoint = bestCandidate;
-		records->push_back(make_pair(currentFrameNumber, bestCandidate));
-		drawCircleFromPoint(bestCandidate, frame);
-	}
-}
 }
 
 void OnChangePosition(int value, void* data) {
@@ -101,15 +87,6 @@ void OnChangePosition(int value, void* data) {
 		(*(VideoCapture*) data).set(CV_CAP_PROP_POS_MSEC, 1000 * value);
 	}
 }
-
-
-
-void OnChangePosition(int value, void* data) {
-	if (value >= 0) {
-		(*(VideoCapture*) data).set(CV_CAP_PROP_POS_MSEC, 1000 * value);
-	}
-}
-
 
 int main(int argc, char** argv) {
 	if (argc < 2) {
@@ -122,6 +99,11 @@ int main(int argc, char** argv) {
 		return -1;
 
 
+	Mat frame, hsv, maskredballup, maskredballdown, maskgreenballup, maskgreenballdown, mask;
+	vector<pair<int, Vec3f> > pointsRed;
+	vector<pair<int, Vec3f> > pointsGreen;
+
+
 	bool paused = false;
 	bool recording = false;
 	bool showpath = false;
@@ -132,9 +114,9 @@ int main(int argc, char** argv) {
 	bool init = false;
 	
 	namedWindow("parameters", 0);
-	int param1 = 20;
-	int param2 = 20;
-	int minradius = 2;
+	int param1 = 40;
+	int param2 = 10;
+	int minradius = 1;
 	int maxradius = 20;
 
 	createTrackbar("canny threshold", "parameters", &param1, 400);
@@ -237,58 +219,53 @@ int main(int argc, char** argv) {
 		}*/
 
 
-			 imshow("automatic calibration", *toshow);
+			imshow("automatic calibration", *toshow);
 
-			 int key = waitKey(30);
-			 switch (key) {
+			int key = waitKey(30);
+			switch (key) {
 
-			 	case '1':
-			 	toshow = &frame;
-			 	break;
-			 	
-			 	case '2':
-			 	toshow = &hsv;
-			 	break;
-			 	
-			 	case '3':
-			 	toshow = &mask;
-			 	break;
+				case '1':
+					toshow = &frame;
+					break;
 
-			 	case '4':
-			 	toshow = &maskredballup;
-			 	break;
+				case '2':
+					toshow = &hsv;
+					break;
 
-			 	case '5':
-			 	toshow = &maskgreenballup;
-			 	break;
+				case '3':
+					toshow = &mask;
+					break;
 
+				case '4':
+					toshow = &maskredballup;
+					break;
 
-			 	case '6':
-			 	toshow = &circleFrame;
-			 	break;
+				case '5':
+				toshow = &maskgreenballup;
+					break;
 
-			 	case 'r':
-			 	recording = !recording;
-			 	break;
+				case 'r':
+					recording = !recording;
+					break;
 
-			 	case 'w':
-				//writeVectorsToFile();
-			 	break;
+				case 'w':
+					//writeVectorsToFile();
+					break;
 
-			 	case 's':
-			 	showpath = !showpath;
-			 	break;
+				case 's':
+					showpath = !showpath;
+					break;
 
-			 	case KEY_ESC: return 0;
-			 	
-			 	case ' ':
-			 	paused = !paused;
-			 	break;
+				case KEY_ESC:
+					return 0;
 
-			 	default:
-			 	break;
-			 }
+				case ' ':
+					paused = !paused;
+					break;
+
+				default:
+					break;
 			}
-
-			return 0;
 		}
+		return 0;
+	}
