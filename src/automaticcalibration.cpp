@@ -179,17 +179,19 @@ int main(int argc, char** argv) {
 	while (1)
 	{
 		Mat* toshow;
-		
-		if (!init) {
-			toshow = &frame;
-			init = true;
-		}
 
 		if (!paused) {
 			somethingToRead = cap.grab();
 		}
 		if (somethingToRead) {
 			cap.retrieve(frame, 0);
+		}
+
+		if (!init) {
+			toshow = &frame;
+			init = true;
+			// We set the last red and green at the middle of the screen
+			lastGreen = lastRed = Vec3f(frame.cols/2.0, frame.rows/2.0);
 		}
 
 		currentFrameNumber = cap.get(CV_CAP_PROP_POS_FRAMES);
