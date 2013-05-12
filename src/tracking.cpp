@@ -300,11 +300,11 @@ int main(int argc, char** argv) {
 				break;
 
 			case 'j':
-				pointsRed.pop();
+				pointsRed.pop_back();
 				break;
 
 			case 'k':
-				pointsGreen.pop();
+				pointsGreen.pop_back();
 				break;
 			case KEY_ESC:
 				return 0;
