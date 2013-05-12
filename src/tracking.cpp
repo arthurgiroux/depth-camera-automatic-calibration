@@ -109,6 +109,8 @@ void writeVectorsToFile(const string filename, const string suffix, const string
 		}
 		file.close();
 	}
+
+	cout << finalname << " written." << endl;
 }
 
 void showPath(Mat* frame, const vector<pair<int, Vec3f> >* records, Scalar color) {
@@ -154,8 +156,8 @@ int main(int argc, char** argv) {
 	bool init = false;
 	
 	namedWindow("parameters", 0);
-	int param1 = 40;
-	int param2 = 10;
+	int param1 = 60;
+	int param2 = 30;
 	int minradius = 1;
 	int maxradius = 20;
 
@@ -205,7 +207,7 @@ int main(int argc, char** argv) {
 		vector<Vec3f> redcircles;
 
 		// void HoughCircles(Mat& image, vector<Vec3f>& circles, int method, double dp, double minDist, double param1=100, double param2=100, int minRadius=0, int maxRadius=0)
-		HoughCircles(maskredballup, redcircles, CV_HOUGH_GRADIENT, 2, 20, (param1 > 0) ? param1 : 1,
+		HoughCircles(maskredballup, redcircles, CV_HOUGH_GRADIENT, 2, 30, (param1 > 0) ? param1 : 1,
 		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 		// GREEN
@@ -221,7 +223,7 @@ int main(int argc, char** argv) {
 		mask = maskgreenballup | maskredballup;
 
 		// void HoughCircles(Mat& image, vector<Vec3f>& circles, int method, double dp, double minDist, double param1=100, double param2=100, int minRadius=0, int maxRadius=0)
-		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, 2, 20, (param1 > 0) ? param1 : 1,
+		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, 2, 30, (param1 > 0) ? param1 : 1,
 		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 
