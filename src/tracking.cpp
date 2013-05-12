@@ -5,7 +5,7 @@
 #include <fstream>
 
 #define MAX_STICK_LENGTH 100
-#define ITERATION_PER_FRAME 3
+#define ITERATION_PER_FRAME 10
 
 #define COLOR_RED Scalar(0, 0, 255)
 #define COLOR_GREEN Scalar(0, 255, 0)
@@ -19,14 +19,6 @@
 using namespace cv;
 using namespace std;
 
-
-// We use this struct to pass the data to onMouse callback
-struct pairVec3f {
-  Vec3f* first;
-  Vec3f* second;
-};
-
-
 static void onMouse( int event, int x, int y, int, void* data )
 {
 	if (event == CV_EVENT_LBUTTONDOWN) {
@@ -37,9 +29,11 @@ static void onMouse( int event, int x, int y, int, void* data )
 		cout <<  (int) color[2] << endl << endl;*/
 		//cout << "(" << x << ", " << y << ")" << endl;
 		
-		*(((pairVec3f*) data)->first) = Vec3f(x, y, 0);
+		pair<Vec3f*, Vec3f*> *points = static_cast<pair<Vec3f*, Vec3f*>*>(data);
+		*points->first = Vec3f(x, y, 0);
 	} else if (event == CV_EVENT_RBUTTONDOWN) {
-		*(((pairVec3f*) data)->second) = Vec3f(x, y, 0);
+		pair<Vec3f*, Vec3f*> *points = static_cast<pair<Vec3f*, Vec3f*>*>(data);
+		*points->second = Vec3f(x, y, 0);
 	}
 }
 
@@ -146,7 +140,6 @@ int main(int argc, char** argv) {
 	vector<pair<int, Vec3f> > pointsRed;
 	vector<pair<int, Vec3f> > pointsGreen;
 	Vec3f lastRed, lastGreen;
-	struct pairVec3f lastPair = { &lastRed, &lastGreen };
 
 	int currentFrameNumber = 0;
 
@@ -157,7 +150,7 @@ int main(int argc, char** argv) {
 	bool somethingToRead = true;
 
 	namedWindow("automatic calibration", 0);
-	setMouseCallback("automatic calibration", onMouse, &lastPair);
+	setMouseCallback("automatic calibration", onMouse, &make_pair(&lastRed, &lastGreen));
 	bool init = false;
 	
 	namedWindow("parameters", 0);
@@ -217,7 +210,7 @@ int main(int argc, char** argv) {
 
 		// GREEN
 		inRange(hsv, Scalar(140, 50, 50), Scalar(160, 255, 255), maskgreenballup);
-		inRange(hsv, Scalar(30, 30, 50), Scalar(60, 255, 255), maskgreenballdown);
+		inRange(hsv, Scalar(20, 50, 50), Scalar(80, 255, 255), maskgreenballdown);
 		maskgreenballup |= maskgreenballdown;
 		//GaussianBlur(maskgreenballup, maskgreenballup, Size(15, 15), 2, 2);
 		morphologyEx(maskgreenballup, maskgreenballup, MORPH_OPEN, Mat());
@@ -306,6 +299,13 @@ int main(int argc, char** argv) {
 				pointsGreen.clear();
 				break;
 
+			case 'j':
+				pointsRed.pop();
+				break;
+
+			case 'k':
+				pointsGreen.pop();
+				break;
 			case KEY_ESC:
 				return 0;
 
