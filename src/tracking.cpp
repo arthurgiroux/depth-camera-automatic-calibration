@@ -5,7 +5,7 @@
 #include <fstream>
 
 #define MAX_STICK_LENGTH 100
-#define ITERATION_PER_FRAME 10
+#define ITERATION_PER_FRAME 20
 
 #define COLOR_RED Scalar(0, 0, 255)
 #define COLOR_GREEN Scalar(0, 255, 0)
