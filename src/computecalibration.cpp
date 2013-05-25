@@ -7,6 +7,12 @@
 using namespace std;
 using namespace cv;
 
+typedef struct Observation {
+    int camera;
+    double x;
+    double y;
+} Observation;
+
 int main(int argc, char** argv) {
     if (argc < 3) {
         cout << "usage: " << argv[0] << " <number_of_camera> <dir_with_intrisic_param> <dir_with_tracking_result>" << endl;
@@ -19,6 +25,9 @@ int main(int argc, char** argv) {
 
     Mat cameraMatrix[nr_of_camera];
     Mat distCoeffs[nr_of_camera];
+
+    map<int, vector<Observation> > final_points;
+    int number_of_observation = 0;
 
     map<int, Vec3f> points_red[nr_of_camera];
     map<int, Vec3f> points_green[nr_of_camera];
@@ -86,6 +95,9 @@ int main(int argc, char** argv) {
                 commun++;
                 points1.push_back(Vec2f(it->second[0], it->second[1]));
                 points2.push_back(Vec2f(points_red[i + 1][it->first][0], points_red[i + 1][it->first][1]));
+                final_points[it->first].push_back({i, it->second[0], it->second[1]});
+                final_points[it->first].push_back({i+1, points_red[i + 1][it->first][0], points_red[i + 1][it->first][1]});
+                number_of_observation++;
             }
         }
 
@@ -102,8 +114,8 @@ int main(int argc, char** argv) {
             Mat check = p.t() * fundamentals[i] * p_2;
 
             if (check.at<double>(0, 0)  <= -1 || check.at<double>(0, 0)  >= 1) {
-                cout << "PROBLEM DURING PAIRWISE TRANSFORMATION WITH CAMERAS " << i << " ";
-                cout << (i+1) << " not close to 0 : " << check.at<double>(0, 0) << endl;
+                //cout << "PROBLEM DURING PAIRWISE TRANSFORMATION WITH CAMERAS " << i << " ";
+                //cout << (i+1) << " not close to 0 : " << check.at<double>(0, 0) << endl;
             }
         }
 
@@ -146,7 +158,12 @@ int main(int argc, char** argv) {
         //Mat tx = V * W * S * V_t;
 
         // NEW : tx = V *  Z * V^T
-        Mat tx = V * Z * V_t;
+        Mat tx_tmp = V * Z * V_t;
+
+        Mat tx = Mat(3, 1, CV_64F);
+        tx.at<double>(0, 0) = tx_tmp.at<double>(2, 1);
+        tx.at<double>(1, 0) = tx_tmp.at<double>(0, 2);
+        tx.at<double>(2, 0) = tx_tmp.at<double>(1, 0);
 
         cout << "translation : " << endl;
         cout << tx << endl;
@@ -166,22 +183,89 @@ int main(int argc, char** argv) {
     // Defining global coordinates system and camera matrices
 
     Mat finalCameraMatrices[nr_of_camera][2];
+    Mat finalProjectionMatrices[nr_of_camera];
+
 
     finalCameraMatrices[0][0] = Mat::eye(3, 3, CV_64F);
-    finalCameraMatrices[0][1] = Mat::zeros(3, 3, CV_64F);
+    finalCameraMatrices[0][1] = Mat::zeros(3, 1, CV_64F);
 
     for (int i = 1; i < nr_of_camera; ++i) {
-        finalCameraMatrices[i][0] = finalCameraMatrices[i - 1][0] * relative_transformation[i][0];
-        finalCameraMatrices[i][1] =  finalCameraMatrices[i - 1][0] * relative_transformation[i][1] + finalCameraMatrices[i - 1][1];
+        finalCameraMatrices[i][0] = finalCameraMatrices[i - 1][0] * relative_transformation[i - 1][0];
+        finalCameraMatrices[i][1] =  finalCameraMatrices[i - 1][0] * relative_transformation[i - 1][1] + finalCameraMatrices[i - 1][1];
+        hconcat(finalCameraMatrices[i][0], finalCameraMatrices[i][1], finalProjectionMatrices[i]);
+        finalProjectionMatrices[i] = cameraMatrix[i] * finalProjectionMatrices[i];
     }
 
     cout << endl << endl << "FINAL RESULT " << endl << endl;
 
     for (int i = 0; i < nr_of_camera; ++i) {
+        cout << endl << endl;
         cout << finalCameraMatrices[i][0] << endl;
-        cout << finalCameraMatrices[i][1] << endl << endl;
+        cout << finalCameraMatrices[i][1] << endl;
+        cout << finalProjectionMatrices[i] << endl << endl;
+
     }
 
+    cout << "outputing for bundle adjustement processing" << endl;
+
+    ofstream file("out.txt");
+    if (file.is_open()) {
+        // first line:
+        // [number of cameras] [number of points] [number of observation]
+        file << nr_of_camera << " " << final_points.size() << " " << number_of_observation << endl;
+
+        // [id of camera] [id of point] [x] [y]
+        int j = 0;
+        for (auto it : final_points) {
+            for (auto vec : it.second) {
+                file << vec.camera << " " << j << " " << vec.x << " " << vec.y << endl;
+            }
+            ++j;
+        }
+
+        // R,t,f,k1 and k2
+        for (int k = 0; k < nr_of_camera; ++k) {
+            // R
+            Mat Rrod;
+            Rodrigues(finalCameraMatrices[k][0], Rrod);
+            file << Rrod.at<double>(0, 0) << endl;
+            file << Rrod.at<double>(0, 1) << endl;
+            file << Rrod.at<double>(0, 2) << endl;
+
+            // t
+            file << finalCameraMatrices[k][1].at<double>(0, 0) << endl;
+            file << finalCameraMatrices[k][1].at<double>(0, 1) << endl;
+            file << finalCameraMatrices[k][1].at<double>(0, 2) << endl;
+
+            // f 
+            file << cameraMatrix[k].at<double>(0, 0) << endl;
+
+            // k1
+            file << cameraMatrix[k].at<double>(0, 0) << endl;
+            // k2 
+            file << cameraMatrix[k].at<double>(0, 1) << endl;
+        }
+
+        // Now we get an initial projection for all the point using our projection  and the triangulation
+
+        for (auto it : final_points) {
+
+            //
+            Mat pnts3D(1, 1, CV_64FC4);
+            vector<Point2f> tmp1, tmp2;
+            Observation o1 = it.second.back();
+            it.second.pop_back();
+            Observation o2 = it.second.back();
+            tmp1.push_back(Point2f(o1.x, o1.y));
+            tmp2.push_back(Point2f(o2.x, o2.y));
+            CvMat proj1 = finalProjectionMatrices[o1.camera];
+            CvMat proj2 = finalProjectionMatrices[o2.camera];
+
+            cvTriangulatePoints(&proj1, &proj2, tmp1, tmp2, pnts3D);
+            cout << pnts3D << endl;
+            
+        }
+    }
     
     return 0;
 }
