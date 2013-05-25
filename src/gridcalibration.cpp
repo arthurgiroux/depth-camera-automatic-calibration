@@ -215,7 +215,7 @@ static void read(const FileNode& node, Settings& x, const Settings& default_valu
 enum { DETECTION = 0, CAPTURING = 1, CALIBRATED = 2 };
 
 bool runCalibrationAndSave(Settings& s, Size imageSize, Mat&  cameraMatrix, Mat& distCoeffs,
-                           vector<vector<Point2f> > imagePoints );
+                           vector<vector<Point2f> > imagePoints, Mat& mapX, Mat& mapY );
 
 int main(int argc, char* argv[])
 {
@@ -238,7 +238,7 @@ int main(int argc, char* argv[])
     }
 
     vector<vector<Point2f> > imagePoints;
-    Mat cameraMatrix, distCoeffs;
+    Mat cameraMatrix, distCoeffs, mapX, mapY;
     Size imageSize;
     int mode = s.inputType == Settings::IMAGE_LIST ? CAPTURING : DETECTION;
     clock_t prevTimestamp = 0;
@@ -260,7 +260,7 @@ int main(int argc, char* argv[])
       //-----  If no more image, or got enough, then stop calibration and show result -------------
       if( mode == CAPTURING && imagePoints.size() >= (unsigned)s.nrFrames )
       {
-          if( runCalibrationAndSave(s, imageSize,  cameraMatrix, distCoeffs, imagePoints))
+          if( runCalibrationAndSave(s, imageSize,  cameraMatrix, distCoeffs, imagePoints, mapX, mapY))
               mode = CALIBRATED;
           else
               mode = DETECTION;
@@ -268,7 +268,7 @@ int main(int argc, char* argv[])
       if(view.empty())          // If no more images then run calibration, save and stop loop.
       {
             if( imagePoints.size() > 0 )
-                runCalibrationAndSave(s, imageSize,  cameraMatrix, distCoeffs, imagePoints);
+                runCalibrationAndSave(s, imageSize,  cameraMatrix, distCoeffs, imagePoints, mapX, mapY);
             break;
       }
 
@@ -343,7 +343,8 @@ int main(int argc, char* argv[])
         if( mode == CALIBRATED && s.showUndistorsed )
         {
             Mat temp = view.clone();
-            undistort(temp, view, cameraMatrix, distCoeffs);
+            remap(temp, view, mapX, mapY, INTER_LINEAR);
+            //undistort(temp, view, cameraMatrix, distCoeffs);
         }
 
         //------------------------------ Show image and check for input commands -------------------
@@ -440,7 +441,7 @@ static void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Po
 
 static bool runCalibration( Settings& s, Size& imageSize, Mat& cameraMatrix, Mat& distCoeffs,
                             vector<vector<Point2f> > imagePoints, vector<Mat>& rvecs, vector<Mat>& tvecs,
-                            vector<float>& reprojErrs,  double& totalAvgErr)
+                            vector<float>& reprojErrs,  double& totalAvgErr, Mat& mapX, Mat& mapY)
 {
 
     cameraMatrix = Mat::eye(3, 3, CV_64F);
@@ -456,7 +457,7 @@ static bool runCalibration( Settings& s, Size& imageSize, Mat& cameraMatrix, Mat
 
     //Find intrinsic and extrinsic camera parameters
     double rms = calibrateCamera(objectPoints, imagePoints, imageSize, cameraMatrix,
-                                 distCoeffs, rvecs, tvecs, s.flag|CV_CALIB_FIX_K4|CV_CALIB_FIX_K5);
+                                 distCoeffs, rvecs, tvecs, s.flag|CV_CALIB_RATIONAL_MODEL);
 
     cout << "Re-projection error reported by calibrateCamera: "<< rms << endl;
 
@@ -464,6 +465,12 @@ static bool runCalibration( Settings& s, Size& imageSize, Mat& cameraMatrix, Mat
 
     totalAvgErr = computeReprojectionErrors(objectPoints, imagePoints,
                                              rvecs, tvecs, cameraMatrix, distCoeffs, reprojErrs);
+
+    initUndistortRectifyMap(cameraMatrix, distCoeffs, Mat(),
+        getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0),
+            imageSize, CV_32FC1, mapX, mapY);
+
+
 
     return ok;
 }
@@ -547,14 +554,14 @@ static void saveCameraParams( Settings& s, Size& imageSize, Mat& cameraMatrix, M
     }
 }
 
-bool runCalibrationAndSave(Settings& s, Size imageSize, Mat&  cameraMatrix, Mat& distCoeffs,vector<vector<Point2f> > imagePoints )
+bool runCalibrationAndSave(Settings& s, Size imageSize, Mat&  cameraMatrix, Mat& distCoeffs,vector<vector<Point2f> > imagePoints, Mat& mapX, Mat& mapY)
 {
     vector<Mat> rvecs, tvecs;
     vector<float> reprojErrs;
     double totalAvgErr = 0;
 
     bool ok = runCalibration(s,imageSize, cameraMatrix, distCoeffs, imagePoints, rvecs, tvecs,
-                             reprojErrs, totalAvgErr);
+                             reprojErrs, totalAvgErr, mapX, mapY);
     cout << (ok ? "Calibration succeeded" : "Calibration failed")
         << ". avg re projection error = "  << totalAvgErr ;
 
