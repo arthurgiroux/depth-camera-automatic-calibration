@@ -1,5 +1,5 @@
 bin/*
 Makefile
-calibration_files
-xml_config
-tracking_result
+calibration_files/
+xml_config/
+tracking_result/
