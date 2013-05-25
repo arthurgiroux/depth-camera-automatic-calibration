@@ -54,7 +54,12 @@ int main(int argc, char** argv) {
                 int frame, x, y;
                 float radius;
                 file >> frame >> x >> y >> radius;
-                points_red[i][frame] = Vec3f(x, y, radius);
+                vector<Point2f> tmp;
+                vector<Point2f> out;
+                tmp.push_back(Point2f(x, y));
+                undistortPoints(tmp, out, cameraMatrix[i], distCoeffs[i]);
+                Point2f pundistort = out.back();
+                points_red[i][frame] = Vec3f(pundistort.x, pundistort.y, radius);
             }
             cout << points_red[i].size() << " red points loaded for camera " << i << endl;
             file.close();
@@ -188,6 +193,8 @@ int main(int argc, char** argv) {
 
     finalCameraMatrices[0][0] = Mat::eye(3, 3, CV_64F);
     finalCameraMatrices[0][1] = Mat::zeros(3, 1, CV_64F);
+    hconcat(finalCameraMatrices[0][0], finalCameraMatrices[0][1], finalProjectionMatrices[0]);
+    finalProjectionMatrices[0] = cameraMatrix[0] * finalProjectionMatrices[0];
 
     for (int i = 1; i < nr_of_camera; ++i) {
         finalCameraMatrices[i][0] = finalCameraMatrices[i - 1][0] * relative_transformation[i - 1][0];
@@ -247,10 +254,8 @@ int main(int argc, char** argv) {
         }
 
         // Now we get an initial projection for all the point using our projection  and the triangulation
-
         for (auto it : final_points) {
-
-            //
+            
             Mat pnts3D(1, 1, CV_64FC4);
             vector<Point2f> tmp1, tmp2;
             Observation o1 = it.second.back();
@@ -261,9 +266,31 @@ int main(int argc, char** argv) {
             CvMat proj1 = finalProjectionMatrices[o1.camera];
             CvMat proj2 = finalProjectionMatrices[o2.camera];
 
-            cvTriangulatePoints(&proj1, &proj2, tmp1, tmp2, pnts3D);
-            cout << pnts3D << endl;
-            
+            //cvTriangulatePoints(&proj1, &proj2, tmp1, tmp2, pnts3D);
+            //cout << pnts3D << endl;
+
+            CvMat *p1 = cvCreateMat(2, 1, CV_64FC1);
+            CvMat *p2 = cvCreateMat(2, 1, CV_64FC1);
+            CV_MAT_ELEM( *p1, double, 0, 0 ) = o1.x;
+            CV_MAT_ELEM( *p1, double, 1, 0 ) = o1.y;
+            CV_MAT_ELEM( *p2, double, 0, 0 ) = o2.x;
+            CV_MAT_ELEM( *p2, double, 1, 0 ) = o2.y;
+
+            //triangulate both projections to find real point position
+            //!!! all parameters must be double type
+            CvMat *point3D = cvCreateMat(4, 1, CV_64F);
+            //cout << Mat(&proj1) << endl;
+            //cout << Mat(&proj2) << endl;
+
+            cvTriangulatePoints(&proj1, &proj2, p1, p2, point3D);
+
+            //to get the real position we need to do also a homogeneous division
+            point3D->data.db[0] /= point3D->data.db[3];
+            point3D->data.db[1] /= point3D->data.db[3];
+            point3D->data.db[2] /= point3D->data.db[3];
+            file << point3D->data.db[0] << endl;
+            file << point3D->data.db[1] << endl;
+            file << point3D->data.db[2] << endl;
         }
     }
     
