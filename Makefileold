@@ -1,0 +1,17 @@
+CC=g++
+CFLAGS=-W -Wall -fpermissive -std=c++11
+#pkg-config --libs --cflags opencv
+LDFLAGS=-I/usr/include/opencv2  -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_ml -lopencv_video -lopencv_features2d -lopencv_calib3d -lopencv_objdetect -lopencv_contrib -lopencv_legacy -lopencv_flann
+all: tracking gridcalibration computecalibration undistort
+
+tracking:
+	$(CC) $(CFLAGS) -o bin/tracking src/tracking.cpp $(LDFLAGS)
+
+gridcalibration:
+	$(CC) $(CFLAGS) -o bin/gridcalibration src/gridcalibration.cpp $(LDFLAGS)
+
+computecalibration:
+	$(CC) $(CFLAGS) -o bin/computecalibration src/computecalibration.cpp $(LDFLAGS)
+
+undistort:
+	$(CC) $(CFLAGS) -o bin/undistort src/undistort.cpp $(LDFLAGS)

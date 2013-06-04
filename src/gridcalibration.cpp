@@ -343,8 +343,8 @@ int main(int argc, char* argv[])
         if( mode == CALIBRATED && s.showUndistorsed )
         {
             Mat temp = view.clone();
-            remap(temp, view, mapX, mapY, INTER_LINEAR);
-            //undistort(temp, view, cameraMatrix, distCoeffs);
+            //remap(temp, view, mapX, mapY, INTER_LINEAR);
+            undistort(temp, view, cameraMatrix, distCoeffs);
         }
 
         //------------------------------ Show image and check for input commands -------------------
@@ -457,7 +457,7 @@ static bool runCalibration( Settings& s, Size& imageSize, Mat& cameraMatrix, Mat
 
     //Find intrinsic and extrinsic camera parameters
     double rms = calibrateCamera(objectPoints, imagePoints, imageSize, cameraMatrix,
-                                 distCoeffs, rvecs, tvecs, s.flag|CV_CALIB_RATIONAL_MODEL);
+                                 distCoeffs, rvecs, tvecs, s.flag|CV_CALIB_FIX_K4|CV_CALIB_FIX_K5);
 
     cout << "Re-projection error reported by calibrateCamera: "<< rms << endl;
 
