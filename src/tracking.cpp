@@ -71,7 +71,7 @@ bool recordPositionOfBall(vector<pair<int, Vec3f> >* records, Vec3f bestCandidat
 		pair<int, Vec3f> lastRegistered = records->back();
 			//cout << distanceBetweenPoints(lastRegistered.second, currentRed) << " --- " << (curFrame - lastRegistered.first)  << endl;
 		if (*lastKnownPoint != lastRegistered.second ||
-		    distanceBetweenPoints(lastRegistered.second, bestCandidate) <= (ITERATION_PER_FRAME * (currentFrameNumber - lastRegistered.first))) {
+		    distanceBetweenPoints(lastRegistered.second, bestCandidate) <= (ITERATION_PER_FRAME * abs(currentFrameNumber - lastRegistered.first))) {
 			*lastKnownPoint = bestCandidate;
 			records->push_back(make_pair(currentFrameNumber, bestCandidate));
 			return true;
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
 	createTrackbar("min radius", "parameters", &minradius, 100);
 	createTrackbar("max radius", "parameters", &maxradius, 200);
 	createTrackbar("min distance", "parameters", &mindist, 100);
-	createTrackbar("accumulator resolution", "parameters", &dp, 200);
+	createTrackbar("accumulator resolution", "parameters", &dp, 10);
 	
 
 	// PLAYBACK CONTROLS
