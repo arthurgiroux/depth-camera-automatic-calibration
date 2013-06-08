@@ -158,14 +158,18 @@ int main(int argc, char** argv) {
 	
 	namedWindow("parameters", 0);
 	int param1 = 60;
-	int param2 = 30;
+	int param2 = 10;
 	int minradius = 1;
 	int maxradius = 20;
+	int mindist = 30;
+	int dp = 1;
 
 	createTrackbar("canny threshold", "parameters", &param1, 400);
 	createTrackbar("center threshold", "parameters", &param2, 400);
 	createTrackbar("min radius", "parameters", &minradius, 100);
 	createTrackbar("max radius", "parameters", &maxradius, 200);
+	createTrackbar("min distance", "parameters", &mindist, 100);
+	createTrackbar("accumulator resolution", "parameters", &dp, 200);
 	
 
 	// PLAYBACK CONTROLS
@@ -208,7 +212,7 @@ int main(int argc, char** argv) {
 		vector<Vec3f> redcircles;
 
 		// void HoughCircles(Mat& image, vector<Vec3f>& circles, int method, double dp, double minDist, double param1=100, double param2=100, int minRadius=0, int maxRadius=0)
-		HoughCircles(maskredballup, redcircles, CV_HOUGH_GRADIENT, 2, 30, (param1 > 0) ? param1 : 1,
+		HoughCircles(maskredballup, redcircles, CV_HOUGH_GRADIENT, (dp > 0) ? dp : 1, (mindist > 0) ? mindist : 1, (param1 > 0) ? param1 : 1,
 		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 		// GREEN
@@ -223,7 +227,7 @@ int main(int argc, char** argv) {
 		mask = maskgreenballup | maskredballup;
 
 		// void HoughCircles(Mat& image, vector<Vec3f>& circles, int method, double dp, double minDist, double param1=100, double param2=100, int minRadius=0, int maxRadius=0)
-		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, 2, 30, (param1 > 0) ? param1 : 1,
+		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, (dp > 0) ? dp : 1, (mindist > 0) ? mindist : 1,  (param1 > 0) ? param1 : 1,
 		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 
