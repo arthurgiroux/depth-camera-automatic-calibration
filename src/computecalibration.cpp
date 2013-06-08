@@ -172,7 +172,7 @@ Vec3d triangulatePoints(Vec2d point1, Vec2d point2, CvMat proj1, CvMat proj2) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
+    if (argc < 4) {
         cout << "usage: " << argv[0] << " <number_of_camera> <dir_with_intrisic_param> <dir_with_tracking_result>" << endl;
         return -1;
     }
@@ -218,8 +218,9 @@ int main(int argc, char** argv) {
                 vector<Point2d> out;
                 tmp.push_back(Point2d(x, y));
                 undistortPoints(tmp, out, cameraMatrix[i], distCoeffs[i]);
-                Point2d pundistort = tmp.back();
-                points_red[i][frame] = { Point2d(x, y), Point2d(pundistort.x, pundistort.y) };
+                Point2d pundistort = out.back();
+                PointCoord st = { Point2d(x, y), Point2d(pundistort.x, pundistort.y) };
+                points_red[i][frame] = st;
             }
             cout << points_red[i].size() << " red points loaded for camera " << i << endl;
             file.close();
@@ -255,14 +256,16 @@ int main(int argc, char** argv) {
         vector<Point2d> points1;
         vector<Point2d> points2;
         int commun = 0;
-
-        for (auto it : points_red[i]) {
-            if (points_red[i+1].count(it.first) > 0) {
+        for(map<int, PointCoord>::iterator it = points_red[i].begin(); it != points_red[i].end(); ++it) {
+        //for (auto it : points_red[i]) {
+            if (points_red[i+1].count(it->first) > 0) {
                 commun++;
-                points1.push_back(it.second.coord_real);
-                points2.push_back(points_red[i + 1][it.first].coord_real);
-                final_points[it.first].push_back({i, it.second});
-                final_points[it.first].push_back({i+1, points_red[i + 1][it.first]});
+                points1.push_back(it->second.coord_real);
+                points2.push_back(points_red[i + 1][it->first].coord_real);
+                Observation o = {i, it->second};
+                final_points[it->first].push_back(o);
+                Observation o2 = {i+1, points_red[i + 1][it->first]};
+                final_points[it->first].push_back(o2);
                 number_of_observation+=2;
             }
         }
@@ -364,9 +367,11 @@ int main(int argc, char** argv) {
 
         // [id of camera] [id of point] [x] [y]
         int j = 0;
-        for (auto it : final_points) {
-            for (auto vec : it.second) {
-                file << vec.camera << " " << j << " " << vec.coord.coord_norm.x << " " << vec.coord.coord_norm.y << endl;
+        for(map<int, vector<Observation> >::iterator it = final_points.begin(); it != final_points.end(); ++it) {
+        //for (auto it : final_points) {
+            for(vector<Observation>::iterator item = it->second.begin(); item != it->second.end(); ++item) {
+            //for (auto vec : it.second) {
+                file << item->camera << " " << j << " " << item->coord.coord_norm.x << " " << item->coord.coord_norm.y << endl;
             }
             ++j;
         }
@@ -380,6 +385,11 @@ int main(int argc, char** argv) {
             file << Rrod.at<double>(0, 1) << endl;
             file << Rrod.at<double>(0, 2) << endl;
 
+
+            cout << Rrod.at<double>(0, 0) << endl;
+            cout << Rrod.at<double>(0, 1) << endl;
+            cout << Rrod.at<double>(0, 2) << endl << endl;
+
             // t
             file << finalCameraMatrices[k][1].at<double>(0, 0) << endl;
             file << finalCameraMatrices[k][1].at<double>(0, 1) << endl;
@@ -389,33 +399,36 @@ int main(int argc, char** argv) {
             file << cameraMatrix[k].at<double>(0, 0) << endl;
 
             // k1
-            file << cameraMatrix[k].at<double>(0, 0) << endl;
+            file << distCoeffs[k].at<double>(0, 0) << endl;
             // k2 
-            file << cameraMatrix[k].at<double>(0, 1) << endl;
+            file << distCoeffs[k].at<double>(0, 1) << endl;
         }
 
         // Now we get an initial projection for all the point using our projection  and the triangulation
         int color = 765;
-        for (auto it : final_points) {
-            
+        //for (auto it : final_points) {
+        for(map<int, vector<Observation> >::iterator it = final_points.begin(); it != final_points.end(); ++it) {
             Mat pnts3D(1, 1, CV_64FC4);
             vector<Point2f> tmp1, tmp2;
-            Observation o1 = it.second.back();
-            it.second.pop_back();
-            Observation o2 = it.second.back();
+            Observation o1 = it->second.back();
+            it->second.pop_back();
+            Observation o2 = it->second.back();
             Mat proj1 = finalProjectionMatrices[o1.camera];
             Mat proj2 = finalProjectionMatrices[o2.camera];
 
             //Vec3d triangPoint = triangulatePoints(Vec2d(o1.coord.coord_real.x, o1.coord.coord_real.y), Vec2d(o2.coord.coord_real.x, o2.coord.coord_real.y), proj1, proj2);
-            Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(o1.coord.coord_norm.x, o1.coord.coord_norm.y, 1), proj1, Point3d(o2.coord.coord_norm.x, o2.coord.coord_norm.y, 1), proj2);
+            Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(o1.coord.coord_real.x, o1.coord.coord_real.y, 1), proj1, Point3d(o2.coord.coord_real.x, o2.coord.coord_real.y, 1), proj2);
 
             /*file << triangPoint[0] << endl;
             file << triangPoint[1] << endl;
             file << triangPoint[2] << endl;*/
+            file << triangPoint.at<double>(0,0) << endl;
+            file << triangPoint.at<double>(0,1) << endl;
+            file << triangPoint.at<double>(0,2) << endl;
             //points_cloud.push_back(Point3d(triangPoint[0], triangPoint[1], triangPoint[2]));
             points_cloud.push_back(Point3d(triangPoint.at<double>(0,0), triangPoint.at<double>(0,1), triangPoint.at<double>(0,2)));
             points_cloud_rgb.push_back(Vec3b(max(0, (color - 510) % 256), max(0, (color - 255) % 256) , color % 256));
-            color -= 1;
+            //color -= 1;
         }
     }
 
@@ -426,6 +439,6 @@ int main(int argc, char** argv) {
     }
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
     RunVisualization(points_cloud, points_cloud_rgb, vector<Point3d>(), vector<Vec3b>());
-    
+
     return 0;
 }

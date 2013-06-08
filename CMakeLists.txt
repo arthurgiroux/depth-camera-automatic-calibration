@@ -6,7 +6,8 @@ include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-set(CMAKE_CXX_FLAGS "-fpermissive -std=c++0x")
+
+set(CMAKE_CXX_FLAGS "-fpermissive")
 
 add_executable(
  bin/computecalibration
@@ -19,6 +20,32 @@ add_executable(
  src/Triangulation.cpp
 )
 
+add_executable(
+ bin/gridcalibration
+ src/gridcalibration.cpp
+)
+
+add_executable(
+ bin/tracking
+ src/tracking.cpp
+)
+
+add_executable(
+ bin/undistort
+ src/undistort.cpp
+)
+
+target_link_libraries(bin/gridcalibration
+			${OpenCV_LIBS}
+		)
+
+target_link_libraries(bin/tracking
+                        ${OpenCV_LIBS}
+                )
+
+target_link_libraries(bin/undistort
+                        ${OpenCV_LIBS}
+                )
 target_link_libraries(bin/computecalibration 
 			${OpenCV_LIBS}
 			${PCL_LIBRARIES}
