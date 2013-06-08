@@ -151,8 +151,9 @@ int main(int argc, char** argv) {
 	bool showpath = false;
 	bool somethingToRead = true;
 
-	namedWindow("automatic calibration", 0);
-	setMouseCallback("automatic calibration", onMouse, &make_pair(&lastRed, &lastGreen));
+	namedWindow("automatic calibration");
+	pair<Vec3f*, Vec3f*> callbackarg = make_pair(&lastRed, &lastGreen);
+	setMouseCallback("automatic calibration", onMouse, &callbackarg);
 	bool init = false;
 	
 	namedWindow("parameters", 0);
@@ -214,7 +215,6 @@ int main(int argc, char** argv) {
 		inRange(hsv, Scalar(140, 50, 50), Scalar(160, 255, 255), maskgreenballup);
 		inRange(hsv, Scalar(20, 50, 50), Scalar(80, 255, 255), maskgreenballdown);
 		maskgreenballup |= maskgreenballdown;
-		//GaussianBlur(maskgreenballup, maskgreenballup, Size(15, 15), 2, 2);
 		morphologyEx(maskgreenballup, maskgreenballup, MORPH_OPEN, Mat());
 		morphologyEx(maskgreenballup, maskgreenballup, MORPH_CLOSE, Mat());
 		medianBlur(maskgreenballup, maskgreenballup, 7);
@@ -227,8 +227,9 @@ int main(int argc, char** argv) {
 		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 
 
+
+		circle(frame, Point(lastRed[0], lastRed[1]), 3, COLOR_TEAL, -1);
 		if (redcircles.size() > 0) {
-			circle(frame, Point(lastRed[0], lastRed[1]), 3, COLOR_TEAL, -1);
 			Vec3f bestCandidate = findClosestPoint(&redcircles, lastRed);
 			Scalar color = COLOR_RED;
 
@@ -240,8 +241,8 @@ int main(int argc, char** argv) {
 			drawCircleFromPoint(bestCandidate, &frame, color);
 		}
 
+		circle(frame, Point(lastGreen[0], lastGreen[1]), 3, COLOR_PURPLE, -1);
 		if (greencircles.size() > 0) {
-			circle(frame, Point(lastGreen[0], lastGreen[1]), 3, COLOR_PURPLE, -1);
 			Vec3f bestCandidate = findClosestPoint(&greencircles, lastGreen);
 			Scalar color = COLOR_RED;
 
