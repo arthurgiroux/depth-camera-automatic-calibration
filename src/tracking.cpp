@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
 		std::stringstream ss;
 		ss << "frame : " << currentFrameNumber << " captured : " << pointsRed.size() << " red, " << pointsGreen.size() << " green"; 
 		putText(frame, ss.str(), Point(10, 50), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255, 255, 255));
-		setTrackbarPos("position", "playback controls", floor(currentFrameNumber / cap.get(CV_CAP_PROP_FPS)));
+		//setTrackbarPos("position", "playback controls", floor(currentFrameNumber / cap.get(CV_CAP_PROP_FPS)));
 		cvtColor(frame, hsv, CV_BGR2HSV);
 
 		// RED
@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
 		imshow("automatic calibration", *toshow);
 
 		int key = waitKey(30);
-		switch (key) {
+		switch (key % 256) {
 
 			case '1':
 				toshow = &frame;
