@@ -6,8 +6,8 @@ include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-
-set(CMAKE_CXX_FLAGS "-fpermissive")
+find_package(Ceres REQUIRED)
+include_directories(${CERES_INCLUDES})
 
 add_executable(
  bin/computecalibration
@@ -49,4 +49,5 @@ target_link_libraries(bin/undistort
 target_link_libraries(bin/computecalibration 
 			${OpenCV_LIBS}
 			${PCL_LIBRARIES}
+			${CERES_LIBRARIES}
 			)
