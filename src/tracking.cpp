@@ -326,6 +326,8 @@ int main(int argc, char** argv) {
 
 		mask = maskgreenballup | maskredballup;
 
+		Canny(maskgreenballup, maskgreenballup, 100, 200);
+
 		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, (dp > 0) ? dp : 1, (mindist > 0) ? mindist : 1,  (param1 > 0) ? param1 : 1,
 		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);
 

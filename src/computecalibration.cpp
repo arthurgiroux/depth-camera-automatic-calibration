@@ -39,6 +39,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
 
+#define VERBOSE
+
 using namespace std;
 using namespace cv;
 
@@ -100,37 +102,32 @@ void getRandTfromE(const Mat& E, Mat& R, Mat& t, bool inv_w = false) {
     Mat V_t = svd.vt;
     Mat V = V_t.t();
 
+
     double W_t_data[3][3] = { {0, 1, 0},
                             {-1,  0, 0},
                             {0,  0, 1} };
 
     Mat W_t = Mat(3, 3, CV_64F, &W_t_data);
 
-    double Z_data[3][3] = { {0, -1, 0},
+    double W_data[3][3] = { {0, -1, 0},
                             {1,  0, 0},
-                            {0,  0, 0} };
+                            {0,  0, 1} };
 
-     Mat Z = Mat(3, 3, CV_64F, &Z_data);
+    Mat W = Mat(3, 3, CV_64F, &W_data);
 
     if (inv_w) {
         W_t = W_t.inv();
     }
 
-    /* tx : tx = V *  Z * V^T
-    Mat tx_tmp = V * Z * V_t;
 
-    Mat tx = Mat(3, 1, CV_64F);
-    tx.at<double>(0, 0) = tx_tmp.at<double>(2, 1);
-    tx.at<double>(1, 0) = tx_tmp.at<double>(0, 2);
-    tx.at<double>(2, 0) = tx_tmp.at<double>(1, 0);
 
-    */
 
     // R = U * W^T * V^T
 
     R = U * W_t * V_t;
 
     // See Mastering OpenCV with Practical Computer Vision Projects; Chap. 4
+    // See Hartley and Zisserman p.259
     t = U.col(2);
 }
 
@@ -313,7 +310,7 @@ class BALProblem {
                 Mat proj1 = projectionMatrices[o1.camera];
                 Mat proj2 = projectionMatrices[o2.camera];
 
-                // We triangulated using these points
+                // We triangulate using these points
                 Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(o1.coord.coord_real.x, o1.coord.coord_real.y, 1), proj1, Point3d(o2.coord.coord_real.x, o2.coord.coord_real.y, 1), proj2);
 
                 parameters_[9*num_cameras_ + 3*k] = triangPoint.at<double>(0,0);
@@ -426,7 +423,9 @@ int main(int argc, char** argv) {
         if (fs.isOpened()) {
             fs["Camera_Matrix"] >> cameraMatrix[i];
             fs["Distortion_Coefficients"] >> distCoeffs[i];
-            cout << "camera matrix: " << cameraMatrix[i] << endl << "distortion coeffs: " << distCoeffs[i] << endl;
+            #ifdef VERBOSE
+                cout << "camera matrix: " << cameraMatrix[i] << endl << "distortion coeffs: " << distCoeffs[i] << endl;
+            #endif
         }
         fs.release();
 
@@ -450,7 +449,9 @@ int main(int argc, char** argv) {
                 PointCoord st = { Point2d(x, y), Point2d(pundistort.x, pundistort.y) };
                 points_red[i][frame] = st;
             }
-            cout << points_red[i].size() << " red points loaded for camera " << i << endl;
+            #ifdef VERBOSE
+                cout << points_red[i].size() << " red points loaded for camera " << i << endl;
+            #endif
             file.close();
         }
 
@@ -473,15 +474,18 @@ int main(int argc, char** argv) {
                 PointCoord st = { Point2d(x, y), Point2d(pundistort.x, pundistort.y) };
                 points_green[i][frame] = st;
             }
-            cout << points_green[i].size() << " green points loaded for camera " << i << endl;
+            #ifdef VERBOSE
+                cout << points_green[i].size() << " green points loaded for camera " << i << endl;
+            #endif
             file.close();
         }
 
     }
 
     // Compute pairwise fundamental matrices
-
-    cout << endl << endl << "############# COMPUTING FUNDAMENTAL MATRICES #############" << endl;
+    #ifdef VERBOSE
+        cout << endl << endl << "############# COMPUTING FUNDAMENTAL MATRICES #############" << endl;
+    #endif
 
     Mat fundamental_matrix;
     Mat essential_matrix;
@@ -511,12 +515,31 @@ int main(int argc, char** argv) {
             }
         }
 
+        // We try to take the green points now only if we didn't already take a red point at the same frame
+        for(map<int, PointCoord>::iterator it = points_green[i].begin(); it != points_green[i].end(); ++it) {
+            // If the next camera has an observation in the same frame AND we haven't already a red point
+            if (points_green[i+1].count(it->first) > 0 && points_red[i].count(it->first) == 0) {
+                commun++;
+                points1.push_back(it->second.coord_real);
+                points2.push_back(points_green[i + 1][it->first].coord_real);
+                points1_norm.push_back(it->second.coord_norm);
+                points2_norm.push_back(points_green[i + 1][it->first].coord_norm);
+                Observation o = {i, it->second};
+                //final_points[it->first].push_back(o);
+                Observation o2 = {i+1, points_green[i + 1][it->first]};
+                //final_points[it->first].push_back(o2);
+                number_of_observation+=2;
+            }
+        }
+
         vector<uchar> status;
         // We compute the fundamental matrix
         fundamental_matrix = findFundamentalMat(points1, points2, status);
-        cout << "points correspondances : " << commun << endl;
-        cout << "points kept : " << countNonZero(status) << endl;
-        cout << "matrix found : " << endl << fundamental_matrix << endl;
+        #ifdef VERBOSE
+            cout << "points correspondances : " << commun << endl;
+            cout << "points kept : " << countNonZero(status) << endl;
+            cout << "matrix found : " << endl << fundamental_matrix << endl;
+        #endif
 
         // getting the essential matrix:
         // E = K'^T * F * K
@@ -529,8 +552,10 @@ int main(int argc, char** argv) {
             exit(EXIT_FAILURE);
         }
 
-        cout << "ESSENTIAL MATRIX " << endl;
-        cout << essential_matrix << endl;
+        #ifdef VERBOSE
+            cout << "ESSENTIAL MATRIX " << endl;
+            cout << essential_matrix << endl;
+        #endif
 
         Mat R(3, 3, CV_64F);
         Mat t(3, 1, CV_64F);
@@ -543,7 +568,6 @@ int main(int argc, char** argv) {
         bool foundsolution = false;
         for (int k = 0; k < status.size(); k++) {
             if (status[k] == 1) {
-                cout << "taking point " << k << endl;
                 firstp = points1_norm[k];
                 secondp = points2_norm[k];
                 if (selectGoodSolution(firstp, secondp, essential_matrix, R, t)) {
@@ -562,7 +586,31 @@ int main(int argc, char** argv) {
         relative_transformation[i][0] = R;
         relative_transformation[i][1] = t;
 
-        cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << endl << endl << endl;
+        // We solve the scaling factor for t:
+        // We will need to triangulate the red marker AND the green marker from the same frame
+        /*vector<Point3d> red_marker;
+        for(map<int, PointCoord>::iterator it = points_red[i].begin(); it != points_red[i].end(); ++it) {
+            // If the green marker is also tracked in this frame
+            // and the next camera has an observation in the same frame for both the green and red point
+            if (points_green[i].count(it->first) > 0 && points_red[i+1].count(it->first) > 0 && points_green[i+1].count(it->first) > 0) {
+                commun++;
+                points1.push_back(it->second.coord_real);
+                points2.push_back(points_red[i + 1][it->first].coord_real);
+                points1_norm.push_back(it->second.coord_norm);
+                points2_norm.push_back(points_red[i + 1][it->first].coord_norm);
+                Observation o = {i, it->second};
+                final_points[it->first].push_back(o);
+                Observation o2 = {i+1, points_red[i + 1][it->first]};
+                final_points[it->first].push_back(o2);
+                number_of_observation+=2;
+
+            }
+        }*/
+
+
+        #ifdef VERBOSE
+            cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << endl << endl << endl;
+        #endif
 
 
     }
@@ -589,14 +637,17 @@ int main(int argc, char** argv) {
         finalProjectionMatrices[i] = cameraMatrix[i] * finalProjectionMatrices[i];
     }
 
-    cout << endl << endl << "FINAL CAMERA MATRICES " << endl << endl;
+    #ifdef VERBOSE
+        cout << endl << endl << "FINAL CAMERA MATRICES " << endl << endl;
 
-    for (int i = 0; i < nr_of_camera; ++i) {
-        cout << endl << endl;
-        cout << finalCameraMatrices[i][0] << endl;
-        cout << finalCameraMatrices[i][1] << endl;
 
-    }
+        for (int i = 0; i < nr_of_camera; ++i) {
+            cout << endl << endl;
+            cout << finalCameraMatrices[i][0] << endl;
+            cout << finalCameraMatrices[i][1] << endl;
+
+        }
+    #endif
 
     // We create an instance of the Bundle Adjustement Problem
     BALProblem bal_problem(nr_of_camera, final_points.size(), number_of_observation, finalCameraMatrices, cameraMatrix,
@@ -627,17 +678,23 @@ int main(int argc, char** argv) {
     // for standard bundle adjustment problems.
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_SCHUR;
-    options.minimizer_progress_to_stdout = true;
+    #ifdef VERBOSE
+        options.minimizer_progress_to_stdout = true;
+    #else
+        options.minimizer_progress_to_stdout = false;
+    #endif
 
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
-    std::cout << summary.FullReport() << "\n";
+    #ifdef VERBOSE
+        std::cout << summary.FullReport() << "\n";
+    #endif
 
 
-    // We show the original camera matrix in red
+    // We show the original cameras in red
 
     for (int k = 0; k < nr_of_camera; ++k) {
-        visualizerShowCamera(finalCameraMatrices[k][0], finalCameraMatrices[k][1], 0.0, 0.0, 255.0, 0.2);
+        visualizerShowCamera(finalCameraMatrices[k][0], finalCameraMatrices[k][1], 255.0, 0.0, 0.0, 0.05, "camera " + k);
     }
 
     // We show the new camera matrix after bundle adjustment in blue
@@ -646,7 +703,9 @@ int main(int argc, char** argv) {
     for (int k = 0; k < bal_problem.num_cameras(); ++k) {
         Mat R, t;
         cameraCeresToOpenCV(cam[k*9], cam[k*9 + 1], cam[k*9 + 2], cam[k*9 + 3], cam[k*9 + 4], cam[k*9 + 5], R, t);
-        visualizerShowCamera(R, t, 255.0, 0.0, 0.0, 0.2);
+        cout << " R " << R << endl;
+        cout << "t " << t << endl << endl;
+        visualizerShowCamera(R, t, 0.0, 0.0, 255.0, 0.05);
     }
 
     // We show the triangulated 3D points
@@ -656,8 +715,8 @@ int main(int argc, char** argv) {
     for(map<int, vector<Observation> >::iterator it = final_points.begin(); it != final_points.end(); ++it) {
         Mat pnts3D(1, 1, CV_64FC4);
         vector<Point2f> tmp1, tmp2;
-        Observation o1 = it->second[it->second.size() - 2];
-        Observation o2 = it->second[it->second.size() - 1];
+        Observation o1 = it->second[0];
+        Observation o2 = it->second[1];
         Mat proj1 = finalProjectionMatrices[o1.camera];
         Mat proj2 = finalProjectionMatrices[o2.camera];
 
