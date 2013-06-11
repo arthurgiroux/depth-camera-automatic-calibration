@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2013 Giroux Arthur (arthur.giroux@epfl.ch)
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <iostream>
@@ -25,19 +43,24 @@ using namespace std;
 using namespace cv;
 
 
+// Structure to hold points coordinates
 typedef struct PointCoord {
-    Point2d coord_real;
-    Point2d coord_norm;
+    Point2d coord_real; // Real x and y
+    Point2d coord_norm; // Normalized x and y
 } PointCoord;
 
+// Represent the observation of a point from a specific camera
 typedef struct Observation {
-    int camera;
-    PointCoord coord;
+    int camera; // Camera index
+    PointCoord coord; // Point coordinates
 } Observation;
 
 
 
-Vec3d triangulatePoints(Vec2d point1, Vec2d point2, CvMat proj1, CvMat proj2) {
+/*
+    Triangulate a point given the 2D location from two differents view and two projection matrix
+*/
+Vec3d triangulatePoints(const Vec2d point1, const Vec2d point2, CvMat proj1, CvMat proj2) {
     CvMat *p1 = cvCreateMat(2, 1, CV_64F);
     CvMat *p2 = cvCreateMat(2, 1, CV_64F);
     CV_MAT_ELEM( *p1, double, 0, 0 ) = point1[0];
@@ -57,18 +80,26 @@ Vec3d triangulatePoints(Vec2d point1, Vec2d point2, CvMat proj1, CvMat proj2) {
     return Vec3d(point3D->data.db[0], point3D->data.db[1], point3D->data.db[2]);
 }
 
+/*
+    Convert a Ceres camera to OpenCV matrices R and t
+*/
 void cameraCeresToOpenCV(double R1, double R2, double R3, double t1, double t2, double t3, Mat& R, Mat& t) {
     Mat Rtmp = (Mat_<double>(3, 1) << R1, R2, R3);
     Rodrigues(Rtmp, R);
     t = (Mat_<double>(3, 1) << t1, t2, t3);
 }
 
+/*
+    Decompose the Essential Matrix into a Rotation matrix and a Translation matrix using SVD
+    see : http://en.wikipedia.org/wiki/Essential_matrix#Determining_R_and_t_from_E
+*/
 void getRandTfromE(const Mat& E, Mat& R, Mat& t, bool inv_w = false) {
     // SVD decomposition
     SVD svd = SVD(E);
     Mat U = svd.u;
     Mat V_t = svd.vt;
     Mat V = V_t.t();
+
     double W_t_data[3][3] = { {0, 1, 0},
                             {-1,  0, 0},
                             {0,  0, 1} };
@@ -85,7 +116,7 @@ void getRandTfromE(const Mat& E, Mat& R, Mat& t, bool inv_w = false) {
         W_t = W_t.inv();
     }
 
-    // tx : tx = V *  Z * V^T
+    /* tx : tx = V *  Z * V^T
     Mat tx_tmp = V * Z * V_t;
 
     Mat tx = Mat(3, 1, CV_64F);
@@ -93,20 +124,23 @@ void getRandTfromE(const Mat& E, Mat& R, Mat& t, bool inv_w = false) {
     tx.at<double>(1, 0) = tx_tmp.at<double>(0, 2);
     tx.at<double>(2, 0) = tx_tmp.at<double>(1, 0);
 
+    */
+
     // R = U * W^T * V^T
 
     R = U * W_t * V_t;
+
+    // See Mastering OpenCV with Practical Computer Vision Projects; Chap. 4
     t = U.col(2);
-
-    //t = tx;
-
-    /*cout << "translation" << endl;
-    cout << t << endl;
-    cout << tx << endl;*/
 }
 
 
-bool visibleInBoth(Point3d point, Mat proj1, Mat proj2) {
+/*
+    Return if wheter or not a 3D point lies in front of the two cameras given their projection matrices
+*/
+bool visibleInBoth(const Point3d point, const Mat proj1, const Mat proj2) {
+
+        // We copy the projection matrix into a 4x4 Matrix
         Mat P4x4 = Mat::eye(4, 4, CV_64F);
         for (int u = 0; u < 3; ++u) {
             for (int v = 0; v < 4; ++v) {
@@ -117,6 +151,7 @@ bool visibleInBoth(Point3d point, Mat proj1, Mat proj2) {
         vector<Point3d> in;
         vector<Point3d> out;
         in.push_back(point);
+        // We do a perspective transformation onto the first camera
         perspectiveTransform(in, out, P4x4);
         Point3d p1 = out.back();
 
@@ -129,55 +164,63 @@ bool visibleInBoth(Point3d point, Mat proj1, Mat proj2) {
             }
         }
 
+        // We do a perspective transformation onto the second camera
         perspectiveTransform(in, out, P4x4);
         Point3d p2 = out.back();
-        cout << "|||||||||||||||  " << p1.z << " ||||||||||| " << p2.z << " ||||||| " << endl << endl;
+        // We check that both projected points lie in front of the cameras
         return (p1.z > 0 && p2.z > 0);
 
 }
 
-bool checkGoodSolution(Point2d point1, Point2d point2, Mat cameraMatrix1, Mat cameraMatrix2, Mat R, Mat t) {
+/*
+    Check if the given R and t are a valid solution
+    It triangulates the normalized point1 and point2 and uses the 3D coordinates to check
+    if it's visible in both camera
+*/
+bool checkGoodSolution(const Point2d point1, const Point2d point2, const Mat R, const Mat t) {
     Mat projMat1, projMat2;
+    // We set the first projection matrix to the identity Rotation and no translation
     hconcat(Mat::eye(3, 3, CV_64F), Mat::zeros(3, 1, CV_64F), projMat1);
-    //projMat1 = cameraMatrix1 * projMat1;
+    // We set the second projection matrix to R and t
     hconcat(R, t, projMat2);
-    //sprojMat2 = cameraMatrix2 * projMat2;
 
-    Mat_<double> testprout = IterativeLinearLSTriangulation(Point3d(point1.x, point1.y, 1), projMat1, Point3d(point2.x, point2.y, 1), projMat2);
+    //Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(point1.x, point1.y, 1), projMat1, Point3d(point2.x, point2.y, 1), projMat2);
 
-    Vec3d testp = triangulatePoints(point1, point2, (CvMat) projMat1, (CvMat) projMat2);
-
-    cout << "triangulation : (" << point1.x << ", "<< point1.y << ") (" << point2.x << ", "<< point2.y << ") " << testp[0] << " " << testp[1] << " " << testp[2] << endl;
+    Vec3d triangPoint = triangulatePoints(point1, point2, (CvMat) projMat1, (CvMat) projMat2);
 
     //return (visibleInBoth(Point3d(testp.at<double>(0, 0), testp.at<double>(0, 1), testp.at<double>(0, 2)), projMat1, projMat2));
-    return (visibleInBoth(testp, projMat1, projMat2));
+    return (visibleInBoth(triangPoint, projMat1, projMat2));
 }
 
-bool selectGoodSolution(Point2d point1, Point2d point2, Mat E, Mat cameraMatrix1, Mat cameraMatrix2, Mat& R, Mat& t) {
+/*
+    Return the right solution among the 4 possible for R and t
+    see: http://en.wikipedia.org/wiki/Essential_matrix#Finding_all_solutions
+
+    return false if no solutions are possible
+*/
+bool selectGoodSolution(const Point2d point1, const Point2d point2, const Mat E, Mat& R, Mat& t) {
 
     getRandTfromE(E, R, t);
     if (determinant(R) < 0) {
          getRandTfromE(-E, R, t);
     }
 
-    if (!checkGoodSolution(point1, point2, cameraMatrix1, cameraMatrix2, R, t)) {
-        if (!checkGoodSolution(point1, point2, cameraMatrix1, cameraMatrix2, R, -t)) {
+    if (!checkGoodSolution(point1, point2, R, t)) {
+        if (!checkGoodSolution(point1, point2, R, -t)) {
 
             getRandTfromE(E, R, t, true);
             if (determinant(R) < 0) {
                  getRandTfromE(-E, R, t, true);
             }
 
-            if (!checkGoodSolution(point1, point2, cameraMatrix1, cameraMatrix2, R, t)) {
-                if (!checkGoodSolution(point1, point2, cameraMatrix1, cameraMatrix2, R, -t)) {
+            if (!checkGoodSolution(point1, point2, R, t)) {
+                if (!checkGoodSolution(point1, point2, R, -t)) {
                     return false;
                 }
                 else {
                     t = -t;
                 }
-
             }
-
         }
         else {
             t = -t;
@@ -187,109 +230,110 @@ bool selectGoodSolution(Point2d point1, Point2d point2, Mat E, Mat cameraMatrix1
     return true;
 }
 
+/*
+    Class to represent the Bundle Adjustement Problem for Ceres Solver
+    see: http://homes.cs.washington.edu/~sagarwal/ceres-solver/tutorial.html#bundle-adjustment
+    and: https://ceres-solver.googlesource.com/ceres-solver/+/master/examples/simple_bundle_adjuster.cc
+*/
 class BALProblem {
- public:
-  ~BALProblem() {
-    delete[] point_index_;
-    delete[] camera_index_;
-    delete[] observations_;
-    delete[] parameters_;
-  }
-
-  int num_points()             const { return num_points_;                     }
-  int num_cameras()            const { return num_cameras_;                    }
-  int num_observations()       const { return num_observations_;               }
-  const double* observations() const { return observations_;                   }
-  double* mutable_cameras()          { return parameters_;                     }
-  double* mutable_points()           { return parameters_  + 9 * num_cameras_; }
-
-  double* mutable_camera_for_observation(int i) {
-    return mutable_cameras() + camera_index_[i] * 9;
-  }
-  double* mutable_point_for_observation(int i) {
-    return mutable_points() + point_index_[i] * 3;
-  }
-
-    BALProblem(int n_camera, int n_points, int n_observations, Mat cameraMatrices[][2], Mat intrinsicMatrices[],
-        Mat projectionMatrices[], Mat distCoeffs[], map<int, vector<Observation> > observations) {
-
-        num_cameras_ = n_camera;
-        num_points_ = n_points;
-        num_observations_ = n_observations;
-
-        point_index_ = new int[num_observations_];
-        camera_index_ = new int[num_observations_];
-        observations_ = new double[2 * num_observations_];
-
-        num_parameters_ = 9 * num_cameras_ + 3 * num_points_;
-        parameters_ = new double[num_parameters_];
-
-        for (int i = 0; i < num_cameras_; ++i) {
-            // R
-            Mat Rrod;
-            Rodrigues(cameraMatrices[i][0], Rrod);
-            parameters_[i*9] = Rrod.at<double>(0, 0);
-            parameters_[i*9 + 1] = Rrod.at<double>(0, 1);
-            parameters_[i*9 + 2] = Rrod.at<double>(0, 2);
-
-            // t
-            parameters_[i*9 + 3] = cameraMatrices[i][1].at<double>(0, 0);
-            parameters_[i*9 + 4] = cameraMatrices[i][1].at<double>(0, 1);
-            parameters_[i*9 + 5] = cameraMatrices[i][1].at<double>(0, 2);
-
-            // f 
-            parameters_[i*9 + 6] = intrinsicMatrices[i].at<double>(0, 0);
-
-            // k1
-            parameters_[i*9 + 7] = distCoeffs[i].at<double>(0, 0);
-            // k2 
-            parameters_[i*9 + 8] = distCoeffs[i].at<double>(0, 1);
+    public:
+        ~BALProblem() {
+          delete[] point_index_;
+           delete[] camera_index_;
+           delete[] observations_;
+           delete[] parameters_;
         }
 
-        int k = 0;
-        int j = 0;
-        for(map<int, vector<Observation> >::iterator it = observations.begin(); it != observations.end(); ++it) {
-            for(vector<Observation>::iterator item = it->second.begin(); item != it->second.end(); ++item) {
-                camera_index_[j] = item->camera;
-                point_index_[j] = k;
-                observations_[2*j] = item->coord.coord_norm.x;
-                observations_[2*j + 1] = item->coord.coord_norm.y;
-                ++j;
+        int num_cameras()            const { return num_cameras_;                    }
+        int num_observations()       const { return num_observations_;               }
+        const double* observations() const { return observations_;                   }
+        double* mutable_cameras()          { return parameters_;                     }
+        double* mutable_points()           { return parameters_  + 9 * num_cameras_; }
+
+        double* mutable_camera_for_observation(int i) {
+          return mutable_cameras() + camera_index_[i] * 9;
+        }
+        double* mutable_point_for_observation(int i) {
+          return mutable_points() + point_index_[i] * 3;
+        }
+
+        BALProblem(int n_camera, int n_points, int n_observations, const Mat cameraMatrices[][2], const Mat intrinsicMatrices[],
+            const Mat projectionMatrices[], const Mat distCoeffs[], map<int, vector<Observation> > observations) {
+
+            num_cameras_ = n_camera;
+            num_points_ = n_points;
+            num_observations_ = n_observations;
+
+            point_index_ = new int[num_observations_];
+            camera_index_ = new int[num_observations_];
+            observations_ = new double[2 * num_observations_];
+
+            num_parameters_ = 9 * num_cameras_ + 3 * num_points_;
+            parameters_ = new double[num_parameters_];
+
+            // Get the cameras parameters
+            for (int i = 0; i < num_cameras_; ++i) {
+                // R
+                Mat Rrod;
+                Rodrigues(cameraMatrices[i][0], Rrod);
+                parameters_[i*9] = Rrod.at<double>(0, 0);
+                parameters_[i*9 + 1] = Rrod.at<double>(0, 1);
+                parameters_[i*9 + 2] = Rrod.at<double>(0, 2);
+
+                // t
+                parameters_[i*9 + 3] = cameraMatrices[i][1].at<double>(0, 0);
+                parameters_[i*9 + 4] = cameraMatrices[i][1].at<double>(0, 1);
+                parameters_[i*9 + 5] = cameraMatrices[i][1].at<double>(0, 2);
+
+                // f 
+                parameters_[i*9 + 6] = intrinsicMatrices[i].at<double>(0, 0);
+
+                // k1
+                parameters_[i*9 + 7] = distCoeffs[i].at<double>(0, 0);
+                // k2 
+                parameters_[i*9 + 8] = distCoeffs[i].at<double>(0, 1);
             }
 
-            Mat pnts3D(1, 1, CV_64FC4);
-            vector<Point2f> tmp1, tmp2;
-            Observation o1 = it->second[it->second.size() - 2];
-            Observation o2 = it->second[it->second.size() - 1];
-            Mat proj1 = projectionMatrices[o1.camera];
-            Mat proj2 = projectionMatrices[o2.camera];
+            // Get the observations and the 3D initial points
+            int k = 0;
+            int j = 0;
+            for(map<int, vector<Observation> >::iterator it = observations.begin(); it != observations.end(); ++it) {
+                // Get the observations
+                for(vector<Observation>::iterator item = it->second.begin(); item != it->second.end(); ++item) {
+                    camera_index_[j] = item->camera;
+                    point_index_[j] = k;
+                    observations_[2*j] = item->coord.coord_norm.x;
+                    observations_[2*j + 1] = item->coord.coord_norm.y;
+                    ++j;
+                }
 
-            //Vec3d triangPoint = triangulatePoints(Vec2d(o1.coord.coord_real.x, o1.coord.coord_real.y), Vec2d(o2.coord.coord_real.x, o2.coord.coord_real.y), proj1, proj2);
-            Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(o1.coord.coord_real.x, o1.coord.coord_real.y, 1), proj1, Point3d(o2.coord.coord_real.x, o2.coord.coord_real.y, 1), proj2);
-            /*
-            parameters_[9*num_cameras_ + 3*k] = triangPoint[0];
-            parameters_[9*num_cameras_ + 3*k + 1] = triangPoint[1];
-            parameters_[9*num_cameras_ + 3*k + 2] = triangPoint[2];
-            */
+                // We get the first two observations and the associated projection matrices
+                Observation o1 = it->second[0];
+                Observation o2 = it->second[1];
+                Mat proj1 = projectionMatrices[o1.camera];
+                Mat proj2 = projectionMatrices[o2.camera];
 
-            parameters_[9*num_cameras_ + 3*k] = triangPoint.at<double>(0,0);
-            parameters_[9*num_cameras_ + 3*k + 1] = triangPoint.at<double>(0,1);
-            parameters_[9*num_cameras_ + 3*k + 2] = triangPoint.at<double>(0,2);
-            ++k;
-        }
-  }
+                // We triangulated using these points
+                Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(o1.coord.coord_real.x, o1.coord.coord_real.y, 1), proj1, Point3d(o2.coord.coord_real.x, o2.coord.coord_real.y, 1), proj2);
+
+                parameters_[9*num_cameras_ + 3*k] = triangPoint.at<double>(0,0);
+                parameters_[9*num_cameras_ + 3*k + 1] = triangPoint.at<double>(0,1);
+                parameters_[9*num_cameras_ + 3*k + 2] = triangPoint.at<double>(0,2);
+                ++k;
+            }
+      }
 
 
- private:
-  int num_cameras_;
-  int num_points_;
-  int num_observations_;
-  int num_parameters_;
+    private:
+        int num_cameras_;
+        int num_points_;
+        int num_observations_;
+        int num_parameters_;
 
-  int* point_index_;
-  int* camera_index_;
-  double* observations_;
-  double* parameters_;
+        int* point_index_;
+        int* camera_index_;
+        double* observations_;
+        double* parameters_;
 };
 
 // Templated pinhole camera model for used with Ceres.  The camera is
@@ -360,12 +404,16 @@ int main(int argc, char** argv) {
     string dir_intrinsic = argv[2];
     string dir_tracking = argv[3];
 
+    // keep the intrinsic camera matrix
     Mat cameraMatrix[nr_of_camera];
+    // keep the distortion coefficients matrix
     Mat distCoeffs[nr_of_camera];
 
+    // The key is the frame number and the value is a vector of observation (camera id; x; y)
     map<int, vector<Observation> > final_points;
     int number_of_observation = 0;
 
+    // 
     map<int, PointCoord> points_red[nr_of_camera];
     map<int, PointCoord> points_green[nr_of_camera];
 
@@ -393,10 +441,11 @@ int main(int argc, char** argv) {
                 int frame, x, y;
                 float radius;
                 file >> frame >> x >> y >> radius;
-                vector<Point2d> tmp;
+                vector<Point2d> in;
                 vector<Point2d> out;
-                tmp.push_back(Point2d(x, y));
-                undistortPoints(tmp, out, cameraMatrix[i], distCoeffs[i]);
+                in.push_back(Point2d(x, y));
+                // We undistort and normalize the point
+                undistortPoints(in, out, cameraMatrix[i], distCoeffs[i]);
                 Point2d pundistort = out.back();
                 PointCoord st = { Point2d(x, y), Point2d(pundistort.x, pundistort.y) };
                 points_red[i][frame] = st;
@@ -415,7 +464,14 @@ int main(int argc, char** argv) {
                 int frame, x, y;
                 float radius;
                 file >> frame >> x >> y >> radius;
-                //points_green[i][frame] = Vec3f(x, y, radius);
+                vector<Point2d> in;
+                vector<Point2d> out;
+                in.push_back(Point2d(x, y));
+                // We undistort and normalize the point
+                undistortPoints(in, out, cameraMatrix[i], distCoeffs[i]);
+                Point2d pundistort = out.back();
+                PointCoord st = { Point2d(x, y), Point2d(pundistort.x, pundistort.y) };
+                points_green[i][frame] = st;
             }
             cout << points_green[i].size() << " green points loaded for camera " << i << endl;
             file.close();
@@ -426,9 +482,11 @@ int main(int argc, char** argv) {
     // Compute pairwise fundamental matrices
 
     cout << endl << endl << "############# COMPUTING FUNDAMENTAL MATRICES #############" << endl;
-    Mat fundamentals[nr_of_camera - 1];
-    Mat essentials[nr_of_camera - 1];
 
+    Mat fundamental_matrix;
+    Mat essential_matrix;
+
+    // Array of the relatives R and t. [][0] = R and [][1] = t
     Mat relative_transformation[nr_of_camera - 1][2];
 
     for (int i = 0; i < nr_of_camera - 1; ++i) {
@@ -438,7 +496,7 @@ int main(int argc, char** argv) {
         vector<Point2d> points2_norm;
         int commun = 0;
         for(map<int, PointCoord>::iterator it = points_red[i].begin(); it != points_red[i].end(); ++it) {
-        //for (auto it : points_red[i]) {
+            // If the next camera has an observation in the same frame
             if (points_red[i+1].count(it->first) > 0) {
                 commun++;
                 points1.push_back(it->second.coord_real);
@@ -454,44 +512,28 @@ int main(int argc, char** argv) {
         }
 
         vector<uchar> status;
-        fundamentals[i] = findFundamentalMat(points1, points2, status);
+        // We compute the fundamental matrix
+        fundamental_matrix = findFundamentalMat(points1, points2, status);
         cout << "points correspondances : " << commun << endl;
         cout << "points kept : " << countNonZero(status) << endl;
-        cout << "matrix found : " << endl << fundamentals[i] << endl;
-
-
-        /*for (unsigned int j = 0; j < points1.size(); j++) {
-            Mat p = Mat(Vec3d(points1[j].x, points1[j].y, 1));
-            Mat p_2 = Mat(Vec3d(points2[j].x, points2[j].y, 1));
-            p.convertTo(p, CV_64F);
-            p_2.convertTo(p_2, CV_64F);
-            Mat check = p_2.t() * fundamentals[i] * p;
-
-            if (check.at<double>(0, 0)  <= -1 || check.at<double>(0, 0)  >= 1) {
-                //cout << "PROBLEM DURING PAIRWISE TRANSFORMATION WITH CAMERAS " << i << " ";
-                //cout << (i+1) << " not close to 0 : " << check.at<double>(0, 0) << endl;
-            }
-        }*/
+        cout << "matrix found : " << endl << fundamental_matrix << endl;
 
         // getting the essential matrix:
         // E = K'^T * F * K
 
-        essentials[i] = cameraMatrix[i+1].t() * fundamentals[i] * cameraMatrix[i];
+        essential_matrix = cameraMatrix[i+1].t() * fundamental_matrix * cameraMatrix[i];
 
-        if (fabsf(determinant(essentials[i])) - 1.0 > 1e-07) {
-            cerr << "det(E) != 0 : " << determinant(essentials[i]) << endl;
+        // We check a requirement for the essential matrix
+        if (fabsf(determinant(essential_matrix)) - 1.0 > 1e-07) {
+            cerr << "det(E) != 0 : " << determinant(essential_matrix) << endl;
             exit(EXIT_FAILURE);
         }
 
-        cout << "ESSENTIAL MATRIX " << endl << determinant(essentials[i]) << endl;
-        cout << essentials[i] << endl;
+        cout << "ESSENTIAL MATRIX " << endl;
+        cout << essential_matrix << endl;
 
         Mat R(3, 3, CV_64F);
         Mat t(3, 1, CV_64F);
-        /*getRandTfromE(essentials[i], R, t);
-        if (determinant(R) < 0) {
-            getRandTfromE(-essentials[i], R, t);
-        }*/
 
         // Find the right solution among the 4 possible
 
@@ -504,7 +546,7 @@ int main(int argc, char** argv) {
                 cout << "taking point " << k << endl;
                 firstp = points1_norm[k];
                 secondp = points2_norm[k];
-                if (selectGoodSolution(firstp, secondp, essentials[i], cameraMatrix[i], cameraMatrix[i+1], R, t)) {
+                if (selectGoodSolution(firstp, secondp, essential_matrix, R, t)) {
                     foundsolution = true;
                     break;
                 }
@@ -512,13 +554,11 @@ int main(int argc, char** argv) {
         }
 
         if (!foundsolution) {
+            cerr << "something went wrong, couldn't find a good solution among the 4 possible during the decomposition of E" << endl;
             exit(EXIT_FAILURE);
         }
 
-        //if (!selectGoodSolution(points1[0], points2[0], essentials[i], cameraMatrix[i], cameraMatrix[i+1], R, t)) {
-            //exit(EXIT_FAILURE);
-        //}
-
+        // We set the relative transformation to the right solution
         relative_transformation[i][0] = R;
         relative_transformation[i][1] = t;
 
@@ -529,15 +569,19 @@ int main(int argc, char** argv) {
 
     // Defining global coordinates system and camera matrices
 
+    // final camera matrix; [][0] = R, [][1] = t
     Mat finalCameraMatrices[nr_of_camera][2];
+
+    // Projection matrix = K * P
     Mat finalProjectionMatrices[nr_of_camera];
 
-
+    // We set the first camera matrix to identity rotation and zero translation
     finalCameraMatrices[0][0] = Mat::eye(3, 3, CV_64F);
     finalCameraMatrices[0][1] = Mat::zeros(3, 1, CV_64F);
     hconcat(finalCameraMatrices[0][0], finalCameraMatrices[0][1], finalProjectionMatrices[0]);
     finalProjectionMatrices[0] = cameraMatrix[0] * finalProjectionMatrices[0];
 
+    // Then for the other cameras we express them relative to the first one
     for (int i = 1; i < nr_of_camera; ++i) {
         finalCameraMatrices[i][0] = finalCameraMatrices[i - 1][0] * relative_transformation[i - 1][0];
         finalCameraMatrices[i][1] =  finalCameraMatrices[i - 1][0] * relative_transformation[i - 1][1] + finalCameraMatrices[i - 1][1];
@@ -545,7 +589,7 @@ int main(int argc, char** argv) {
         finalProjectionMatrices[i] = cameraMatrix[i] * finalProjectionMatrices[i];
     }
 
-    cout << endl << endl << "FINAL RESULT " << endl << endl;
+    cout << endl << endl << "FINAL CAMERA MATRICES " << endl << endl;
 
     for (int i = 0; i < nr_of_camera; ++i) {
         cout << endl << endl;
@@ -554,173 +598,78 @@ int main(int argc, char** argv) {
 
     }
 
-    /*
-    cout << "outputing for bundle adjustement processing" << endl;
-    
-    vector<Point3d> points_cloud;
-    vector<Vec3b> points_cloud_rgb;
-    ofstream file("out.txt");
-    if (file.is_open()) {
-        // first line:
-        // [number of cameras] [number of points] [number of observation]
-        file << nr_of_camera << " " << final_points.size() << " " << number_of_observation << endl;
-
-        // [id of camera] [id of point] [x] [y]
-        int j = 0;
-        for(map<int, vector<Observation> >::iterator it = final_points.begin(); it != final_points.end(); ++it) {
-        //for (auto it : final_points) {
-            for(vector<Observation>::iterator item = it->second.begin(); item != it->second.end(); ++item) {
-            //for (auto vec : it.second) {
-                file << item->camera << " " << j << " " << item->coord.coord_norm.x << " " << item->coord.coord_norm.y << endl;
-            }
-            ++j;
-        }
-
-        // R,t,f,k1 and k2
-        for (int k = 0; k < nr_of_camera; ++k) {
-            // R
-            Mat Rrod;
-            Rodrigues(finalCameraMatrices[k][0], Rrod);
-            file << Rrod.at<double>(0, 0) << endl;
-            file << Rrod.at<double>(0, 1) << endl;
-            file << Rrod.at<double>(0, 2) << endl;
-
-            // t
-            file << finalCameraMatrices[k][1].at<double>(0, 0) << endl;
-            file << finalCameraMatrices[k][1].at<double>(0, 1) << endl;
-            file << finalCameraMatrices[k][1].at<double>(0, 2) << endl;
-
-            // f 
-            file << cameraMatrix[k].at<double>(0, 0) << endl;
-
-            // k1
-            file << distCoeffs[k].at<double>(0, 0) << endl;
-            // k2 
-            file << distCoeffs[k].at<double>(0, 1) << endl;
-        }
-
-        // Now we get an initial projection for all the point using our projection  and the triangulation
-        int color = 765;
-        //for (auto it : final_points) {
-        for(map<int, vector<Observation> >::iterator it = final_points.begin(); it != final_points.end(); ++it) {
-            Mat pnts3D(1, 1, CV_64FC4);
-            vector<Point2f> tmp1, tmp2;
-            Observation o1 = it->second[it->second.size() - 2];
-            Observation o2 = it->second[it->second.size() - 1];
-            Mat proj1 = finalProjectionMatrices[o1.camera];
-            Mat proj2 = finalProjectionMatrices[o2.camera];
-
-            //Vec3d triangPoint = triangulatePoints(Vec2d(o1.coord.coord_real.x, o1.coord.coord_real.y), Vec2d(o2.coord.coord_real.x, o2.coord.coord_real.y), proj1, proj2);
-            Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(o1.coord.coord_real.x, o1.coord.coord_real.y, 1), proj1, Point3d(o2.coord.coord_real.x, o2.coord.coord_real.y, 1), proj2);
-
-            /*file << triangPoint[0] << endl;
-            file << triangPoint[1] << endl;
-            file << triangPoint[2] << endl;
-            file << triangPoint.at<double>(0,0) << endl;
-            file << triangPoint.at<double>(0,1) << endl;
-            file << triangPoint.at<double>(0,2) << endl;
-            //points_cloud.push_back(Point3d(triangPoint[0], triangPoint[1], triangPoint[2]));
-            points_cloud.push_back(Point3d(triangPoint.at<double>(0,0), triangPoint.at<double>(0,1), triangPoint.at<double>(0,2)));
-            points_cloud_rgb.push_back(Vec3b(max(0, (color - 510) % 256), max(0, (color - 255) % 256) , color % 256));
-            //color -= 1;
-        }
-    }
-
-    for (int i = 0; i < nr_of_camera; ++i) {
-        Matx33d R(finalCameraMatrices[i][0]);
-        Vec3d t(finalCameraMatrices[i][1]);
-        visualizerShowCamera(R, t, 255.0, 0.0, 0.0, 0.2);
-    }
-
-    Mat R, t;
-    cameraCeresToOpenCV(-0.143935, -0.0258916, -0.22189, 0.0534525, 0.0290966, 0.534794, R, t);
-    visualizerShowCamera(R, t, 0.0, 255.0, 255.0, 0.2);
-
-    cameraCeresToOpenCV(-0.221037, -0.52207, -0.0239337, 0.830321, -0.202966, 1.97034, R, t);
-    visualizerShowCamera(R, t, 0.0, 0.0, 255.0, 0.2);
-
-    cameraCeresToOpenCV(-0.23935, -2.11934, -0.0779739, 0.826816, -0.0675392, 1.0132, R, t);
-    visualizerShowCamera(R, t, 0.0, 0.0, 255.0, 0.2);
-
-    cameraCeresToOpenCV(-0.161741, 2.56452, 0.309635, -0.184644, -0.109169, 1.04396, R, t);
-    visualizerShowCamera(R, t, 0.0, 0.0, 255.0, 0.2);
-
-    cameraCeresToOpenCV(-0.410917, 0.898175, 0.121266, -0.3574, -0.141794, 0.0738521, R, t);
-    visualizerShowCamera(R, t, 0.0, 0.0, 255.0, 0.2);
-*/
-
+    // We create an instance of the Bundle Adjustement Problem
     BALProblem bal_problem(nr_of_camera, final_points.size(), number_of_observation, finalCameraMatrices, cameraMatrix,
         finalProjectionMatrices, distCoeffs, final_points);
 
 
-  const double* observations = bal_problem.observations();
+    const double* observations = bal_problem.observations();
 
-  // Create residuals for each observation in the bundle adjustment problem. The
-  // parameters for cameras and points are added automatically.
-  ceres::Problem problem;
-  for (int i = 0; i < bal_problem.num_observations(); ++i) {
-    // Each Residual block takes a point and a camera as input and outputs a 2
-    // dimensional residual. Internally, the cost function stores the observed
-    // image location and compares the reprojection against the observation.
+    // Create residuals for each observation in the bundle adjustment problem. The
+    // parameters for cameras and points are added automatically.
+    ceres::Problem problem;
+    for (int i = 0; i < bal_problem.num_observations(); ++i) {
+        // Each Residual block takes a point and a camera as input and outputs a 2
+        // dimensional residual. Internally, the cost function stores the observed
+        // image location and compares the reprojection against the observation.
 
-    ceres::CostFunction* cost_function =
+        ceres::CostFunction* cost_function =
         SnavelyReprojectionError::Create(observations[2 * i + 0],
-                                         observations[2 * i + 1]);
-    problem.AddResidualBlock(cost_function,
+           observations[2 * i + 1]);
+        problem.AddResidualBlock(cost_function,
                              NULL /* squared loss */,
-                             bal_problem.mutable_camera_for_observation(i),
-                             bal_problem.mutable_point_for_observation(i));
-  }
-
-  // Make Ceres automatically detect the bundle structure. Note that the
-  // standard solver, SPARSE_NORMAL_CHOLESKY, also works fine but it is slower
-  // for standard bundle adjustment problems.
-  ceres::Solver::Options options;
-  options.linear_solver_type = ceres::DENSE_SCHUR;
-  options.minimizer_progress_to_stdout = true;
-
-  ceres::Solver::Summary summary;
-  for (int i = 0; i < bal_problem.num_cameras(); i++) {
-    for (int j = 0; j < 9; j++) {
-      std::cout << *(bal_problem.mutable_cameras() + 9*i + j) << std::endl;
+           bal_problem.mutable_camera_for_observation(i),
+           bal_problem.mutable_point_for_observation(i));
     }
-    std::cout << std::endl;
-  }
-  std::cout << std::endl << std::endl;
-  ceres::Solve(options, &problem, &summary);
-  std::cout << summary.FullReport() << "\n";
-  for (int i = 0; i < bal_problem.num_cameras(); i++) {
-    for (int j = 0; j < 9; j++) {
-      std::cout << *(bal_problem.mutable_cameras() + 9*i + j) << std::endl;
+
+    // Make Ceres automatically detect the bundle structure. Note that the
+    // standard solver, SPARSE_NORMAL_CHOLESKY, also works fine but it is slower
+    // for standard bundle adjustment problems.
+    ceres::Solver::Options options;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.minimizer_progress_to_stdout = true;
+
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
+    std::cout << summary.FullReport() << "\n";
+
+
+    // We show the original camera matrix in red
+
+    for (int k = 0; k < nr_of_camera; ++k) {
+        visualizerShowCamera(finalCameraMatrices[k][0], finalCameraMatrices[k][1], 0.0, 0.0, 255.0, 0.2);
     }
-    std::cout << std::endl;
-  }
-  std::cout << std::endl << std::endl;
 
-  double* cam = bal_problem.mutable_cameras();
+    // We show the new camera matrix after bundle adjustment in blue
+    double* cam = bal_problem.mutable_cameras();
 
-  for (int k = 0; k < bal_problem.num_cameras(); ++k) {
-    Mat R, t;
-    cameraCeresToOpenCV(cam[k*9], cam[k*9 + 1], cam[k*9 + 2], cam[k*9 + 3], cam[k*9 + 4], cam[k*9 + 5], R, t);
-    visualizerShowCamera(R, t, 255.0, 0.0, 255.0, 0.2);
-  }
+    for (int k = 0; k < bal_problem.num_cameras(); ++k) {
+        Mat R, t;
+        cameraCeresToOpenCV(cam[k*9], cam[k*9 + 1], cam[k*9 + 2], cam[k*9 + 3], cam[k*9 + 4], cam[k*9 + 5], R, t);
+        visualizerShowCamera(R, t, 255.0, 0.0, 0.0, 0.2);
+    }
 
-    
+    // We show the triangulated 3D points
     vector<Point3d> points_cloud;
     vector<Vec3b> points_cloud_rgb;
 
-  double* points = bal_problem.mutable_points();
+    for(map<int, vector<Observation> >::iterator it = final_points.begin(); it != final_points.end(); ++it) {
+        Mat pnts3D(1, 1, CV_64FC4);
+        vector<Point2f> tmp1, tmp2;
+        Observation o1 = it->second[it->second.size() - 2];
+        Observation o2 = it->second[it->second.size() - 1];
+        Mat proj1 = finalProjectionMatrices[o1.camera];
+        Mat proj2 = finalProjectionMatrices[o2.camera];
 
-  for (int k = 0; k < bal_problem.num_points(); ++k) {
-    points_cloud.push_back(Point3d(points[3*k], points[3*k + 1], points[3*k + 2]));
-    points_cloud_rgb.push_back(Vec3b(255, 255, 255));
-  }
-
-
+        //Vec3d triangPoint = triangulatePoints(Vec2d(o1.coord.coord_real.x, o1.coord.coord_real.y), Vec2d(o2.coord.coord_real.x, o2.coord.coord_real.y), proj1, proj2);
+        Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(o1.coord.coord_real.x, o1.coord.coord_real.y, 1), proj1, Point3d(o2.coord.coord_real.x, o2.coord.coord_real.y, 1), proj2);
+        //points_cloud.push_back(Point3d(triangPoint[0], triangPoint[1], triangPoint[2]));
+        points_cloud.push_back(Point3d(triangPoint.at<double>(0,0), triangPoint.at<double>(0,1), triangPoint.at<double>(0,2)));
+        points_cloud_rgb.push_back(Vec3b(255, 255, 255));
+    }
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
     RunVisualization(points_cloud, points_cloud_rgb, vector<Point3d>(), vector<Vec3b>());
-
 
     return 0;
 }
