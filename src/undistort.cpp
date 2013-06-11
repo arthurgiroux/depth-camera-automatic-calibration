@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
 	bool init = false;
 	bool somethingToRead = true;
 
-	namedWindow("undistorted", 0);
+	namedWindow("undistorted");
 	// PLAYBACK CONTROLS
 	namedWindow("playback controls", 0);
 	createTrackbar("position", "playback controls", 0, floor(cap.get(CV_CAP_PROP_FRAME_COUNT) / cap.get(CV_CAP_PROP_FPS)), OnChangePosition, (void*) &cap);
@@ -83,6 +83,7 @@ int main(int argc, char** argv) {
 		}
 
 		currentFrameNumber = cap.get(CV_CAP_PROP_POS_FRAMES);
+		//setTrackbarPos("position", "playback controls", floor(currentFrameNumber / cap.get(CV_CAP_PROP_FPS)));
 
 		undistort(frame, undist, cameraMatrix, distCoeffs);
 

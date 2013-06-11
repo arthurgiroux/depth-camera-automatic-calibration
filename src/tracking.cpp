@@ -25,7 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // Maximum stick length in pixel
 #define MAX_STICK_LENGTH 100
 // Maximum number in pixel (per frame elapsed) for the distance between the previous marker and the new one
-#define ITERATION_PER_FRAME 20
+#define ITERATION_PER_FRAME 10
 
 #define COLOR_RED Scalar(0, 0, 255)
 #define COLOR_GREEN Scalar(0, 255, 0)
@@ -255,10 +255,8 @@ int main(int argc, char** argv) {
 	
 
 	// Playback controls
-	if (!disable_navigation) {
-		namedWindow("playback controls", 0);
-		createTrackbar("position", "playback controls", 0, floor(cap.get(CV_CAP_PROP_FRAME_COUNT) / cap.get(CV_CAP_PROP_FPS)), OnChangePosition, (void*) &cap);
-	}
+	namedWindow("playback controls", 0);
+	createTrackbar("position", "playback controls", 0, floor(cap.get(CV_CAP_PROP_FRAME_COUNT) / cap.get(CV_CAP_PROP_FPS)), OnChangePosition, (void*) &cap);
 
 	while (1)
 	{
@@ -324,9 +322,10 @@ int main(int argc, char** argv) {
 
 		vector<Vec3f> greencircles;
 
+		Canny(maskgreenballup, maskgreenballup, 100, 200);
+
 		mask = maskgreenballup | maskredballup;
 
-		Canny(maskgreenballup, maskgreenballup, 100, 200);
 
 		HoughCircles(maskgreenballup, greencircles, CV_HOUGH_GRADIENT, (dp > 0) ? dp : 1, (mindist > 0) ? mindist : 1,  (param1 > 0) ? param1 : 1,
 		             (param2 > 0) ? param2 : 1, (minradius > 0) ? minradius : 1, (maxradius > 0) ? maxradius : 1);

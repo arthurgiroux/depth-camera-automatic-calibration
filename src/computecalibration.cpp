@@ -60,7 +60,7 @@ typedef struct Observation {
 
 
 /*
-    Triangulate a point given the 2D location from two differents view and two projection matrix
+    Triangulate a point given the 2D location from two differents views and two projection matrices
 */
 Vec3d triangulatePoints(const Vec2d point1, const Vec2d point2, CvMat proj1, CvMat proj2) {
     CvMat *p1 = cvCreateMat(2, 1, CV_64F);
@@ -137,35 +137,35 @@ void getRandTfromE(const Mat& E, Mat& R, Mat& t, bool inv_w = false) {
 */
 bool visibleInBoth(const Point3d point, const Mat proj1, const Mat proj2) {
 
-        // We copy the projection matrix into a 4x4 Matrix
-        Mat P4x4 = Mat::eye(4, 4, CV_64F);
-        for (int u = 0; u < 3; ++u) {
-            for (int v = 0; v < 4; ++v) {
-                P4x4.at<double>(u, v) = proj1.at<double>(u, v);
-            }
+    // We copy the projection matrix into a 4x4 Matrix
+    Mat P4x4 = Mat::eye(4, 4, CV_64F);
+    for (int u = 0; u < 3; ++u) {
+        for (int v = 0; v < 4; ++v) {
+            P4x4.at<double>(u, v) = proj1.at<double>(u, v);
         }
+    }
         
-        vector<Point3d> in;
-        vector<Point3d> out;
-        in.push_back(point);
-        // We do a perspective transformation onto the first camera
-        perspectiveTransform(in, out, P4x4);
-        Point3d p1 = out.back();
+    vector<Point3d> in;
+    vector<Point3d> out;
+    in.push_back(point);
+    // We do a perspective transformation onto the first camera
+    perspectiveTransform(in, out, P4x4);
+    Point3d p1 = out.back();
 
-        out.clear();
+    out.clear();
 
-        P4x4 = Mat::eye(4, 4, CV_64F);
-        for (int u = 0; u < 3; ++u) {
-            for (int v = 0; v < 4; ++v) {
-                P4x4.at<double>(u, v) = proj2.at<double>(u, v);
-            }
+    P4x4 = Mat::eye(4, 4, CV_64F);
+    for (int u = 0; u < 3; ++u) {
+        for (int v = 0; v < 4; ++v) {
+            P4x4.at<double>(u, v) = proj2.at<double>(u, v);
         }
+    }
 
-        // We do a perspective transformation onto the second camera
-        perspectiveTransform(in, out, P4x4);
-        Point3d p2 = out.back();
-        // We check that both projected points lie in front of the cameras
-        return (p1.z > 0 && p2.z > 0);
+    // We do a perspective transformation onto the second camera
+    perspectiveTransform(in, out, P4x4);
+    Point3d p2 = out.back();
+    // We check that both projected points lie in front of the cameras
+    return (p1.z > 0 && p2.z > 0);
 
 }
 
@@ -181,12 +181,12 @@ bool checkGoodSolution(const Point2d point1, const Point2d point2, const Mat R, 
     // We set the second projection matrix to R and t
     hconcat(R, t, projMat2);
 
-    //Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(point1.x, point1.y, 1), projMat1, Point3d(point2.x, point2.y, 1), projMat2);
+    Mat_<double> triangPoint = IterativeLinearLSTriangulation(Point3d(point1.x, point1.y, 1), projMat1, Point3d(point2.x, point2.y, 1), projMat2);
 
-    Vec3d triangPoint = triangulatePoints(point1, point2, (CvMat) projMat1, (CvMat) projMat2);
+    //Vec3d triangPoint = triangulatePoints(point1, point2, (CvMat) projMat1, (CvMat) projMat2);
 
-    //return (visibleInBoth(Point3d(testp.at<double>(0, 0), testp.at<double>(0, 1), testp.at<double>(0, 2)), projMat1, projMat2));
-    return (visibleInBoth(triangPoint, projMat1, projMat2));
+    return (visibleInBoth(Point3d(triangPoint.at<double>(0, 0), triangPoint.at<double>(0, 1), triangPoint.at<double>(0, 2)), projMat1, projMat2));
+    //return (visibleInBoth(triangPoint, projMat1, projMat2));
 }
 
 /*
@@ -410,7 +410,6 @@ int main(int argc, char** argv) {
     map<int, vector<Observation> > final_points;
     int number_of_observation = 0;
 
-    // 
     map<int, PointCoord> points_red[nr_of_camera];
     map<int, PointCoord> points_green[nr_of_camera];
 
@@ -499,6 +498,8 @@ int main(int argc, char** argv) {
         vector<Point2d> points1_norm;
         vector<Point2d> points2_norm;
         int commun = 0;
+
+        // We get all the marker position that are visible in the same frame for both cameras
         for(map<int, PointCoord>::iterator it = points_red[i].begin(); it != points_red[i].end(); ++it) {
             // If the next camera has an observation in the same frame
             if (points_red[i+1].count(it->first) > 0) {
