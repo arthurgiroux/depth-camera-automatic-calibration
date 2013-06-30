@@ -3,12 +3,17 @@ depth-camera-automatic-calibration
 
 Automatic calibration tool for depth and rgb camera
 
-To build the project you may have to change the LDFLAG variable in the Makefile,
-to determine the value of this variable you can use the command pkg-config --libs --cflags opencv
 
-The pipeline is cut into three differents program.
+=================
+REQUIREMENTS
+=================
+To build the project you need CMake, the PCL libraries and Ceres-solver.
+
+The pipeline is cut into several differents program.
 
 
+=================
+TRACKING
 =================
 The first program is the tracking one and is use to get the position of the marker from different cameras view.
 
@@ -45,15 +50,17 @@ Usage for getting the tracking position:
     When the tracking circle becomes blue it means that the circle has been added to the capture.
     You can use the key 's' to see the recorded points.
     When you are happy with the result you can stop the capture with 'r' and press 'w' to write the capture to the files.
-    If you are not you can use d to empty the captured points and start again somewhere else in the file.
+    If you are not you can use 'd' to empty the captured points and start again somewhere else in the file.
 
 
+=================
+GRID CALIBRATION
 =================
 
 The second one is a tool to retrieve the intrinsic parameters of a camera using a calibration grid.
 It's a modification of this tool: http://docs.opencv.org/doc/tutorials/calib3d/camera_calibration/camera_calibration.html
 
-Basically you use an xml config file to configure it for each camera (you can find example in the directory xml_config).
+Basically you use an xml config file to configure it for each camera (you can find examples in the directory xml_config).
 
 Then you can launch it like this:
 
@@ -61,10 +68,31 @@ Then you can launch it like this:
 
 And when the program is running you have to press "g" to start the capture and it will give you the parameters in the output xml file.
 
+To have the best results you need to cover as most space as possible with your grid, otherwise you will have weird distortion coefficients.
+
 
 =================
+CHECKING THE DISTORTION
+=================
 
-The last program is use to do the calibration from the data of the two previous tools.
+There is a little script to allow you to visualize the distortion that you got using the previous tool.
+It's used like this:
+
+./bin/undistort <path-to-video-file> <calib-config>
+
+So for example:
+
+./bin/undistort ../videos/practise_26_02_2013/seq_calibration/videos/cam_0.avi xml_config/cam0.xml
+
+
+You can then switch between distorted/undistorted using the '1' and '2' keys.
+
+=================
+CALIBRATION
+=================
+
+
+The last program is use to do the calibration from the data of the previous tools.
 
 Once you have all the datas, you can launch it like this:
 
@@ -72,6 +100,6 @@ Once you have all the datas, you can launch it like this:
 
 Where 5 is the number of cameras, calibration_files/ is the directory that contains the parameters of the camera and tracking_result/ contains the tracking of the marker.
 
-It will output you the final N camera projection matrices.
+It will output you the final N camera projection matrices and show you the cameras / reprojected points.
 
 
